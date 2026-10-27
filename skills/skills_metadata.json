@@ -1,0 +1,59 @@
+{
+  "version": "1.1",
+  "skills": {
+    "forensics": {
+      "file": "forensics/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "Autopsies of closed and missed perp trades. Reads the ledger and decision snapshots,"
+    },
+    "perps-boss": {
+      "file": "perps-boss/SKILL.md",
+      "version": "v4.4",
+      "core": true,
+      "description": "Core perps playbook for perps_bot (bots/perps.py) on Jupiter Perps (SOL, BTC, ETH). The bot builds per-chain packets in inbox/ and executes only what the agent writes to json_relay/perp_<chain>_signal.json; i"
+    },
+    "pnl-tracker": {
+      "file": "pnl-tracker/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "Realized and unrealized perps PnL, fees and funding."
+    },
+    "autoagent": {
+      "file": "sub-skills/autoagent/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "Reads the overseer report from bots/sub-bots/agent_autoagent.py: a nightly grade of"
+    },
+    "code-monitor": {
+      "file": "sub-skills/code-monitor/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "Reads packets from bots/sub-bots/code_tuner.py: source changes, param drift and"
+    },
+    "learnings-summarizer": {
+      "file": "sub-skills/learnings-summarizer/SKILL.md",
+      "version": "v4.3",
+      "core": false,
+      "description": "Nightly distill of learnings/LEARNINGS.md: archives the Section 8 window (filled by learnings_writer) and distills it into Sections 1-7."
+    },
+    "morning-brief": {
+      "file": "sub-skills/morning-brief/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "The daily perps brief to the owner. The bot fires it once a day"
+    },
+    "owner-ping": {
+      "file": "sub-skills/owner-ping/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "How the agent notifies the owner. Use it for every owner-facing message:"
+    },
+    "warden": {
+      "file": "sub-skills/warden/SKILL.md",
+      "version": "2.0.0",
+      "core": false,
+      "description": "Reads packets from bots/sub-bots/security_warden.py: wallet anomalies, file"
+    }
+  }
+}

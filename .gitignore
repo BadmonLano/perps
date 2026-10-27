@@ -1,0 +1,74 @@
+# secrets / local config
+.env
+bots/.env
+*.env
+!.env.example
+!bots/.env.example
+setup.json
+bots/setup.json
+
+# runtime data (folders ship empty with .gitkeep)
+bot_logs/*
+inbox/*
+inbox_results/*
+json_relay/*
+owner_inbox/*
+owner_inbox_archive/
+rules/*
+learnings/*
+!*/.gitkeep
+!learnings/README.md
+!learnings/LEARNINGS.template.md
+!learnings/nightly_self_eval.automation.md
+!rules/rules.example.md
+owner_commands/*
+bots/bot_logs/
+
+# browser / scraper profiles
+bots/scraper_profile/
+scraper_profile/
+x_profiles/
+**/browser_profile*/
+**/playwright*/
+
+# python / caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# runtime outputs (engine self-heal / signals / paper)
+bots/signal_contracts/
+*.last-good
+*.bak
+*.bak_*
+paper/
+**/paper/
+
+# local backups (never ship)
+backups/
+**/backups/
+
+# sub-bot state written next to the code (tuner runtime state; all optional, created at runtime)
+bots/tuner/*.bak
+bots/tuner/perps_params.json
+bots/tuner/perps_tune_packet_state.json
+bots/tuner/perps_tuned_defaults.json
+bots/tuner/tune history/*.json
+
+# folder placeholders ship (keep this block last so it wins)
+!inbox_results/done/
+!inbox_results/failed/
+inbox_results/done/*
+inbox_results/failed/*
+!**/.gitkeep
