@@ -69,7 +69,7 @@ from .base import PacketAnalyzer, AnalysisResult
 #     Shown in every packet as `venue_max_leverage` so it's always visible what the
 #     real headroom is.
 #   * The actual RECOMMENDATION is capped by the operator-owned MAX_LEVERAGE bound
-#     (passed in via context; the meeting safeguard keeps that <=70). The user owns
+#     (passed in via context; the meeting safeguard keeps that <=20). The user owns
 #     the recommendation ceiling; the venue owns the physical max. Never conflate them.
 VENUE_MAX_LEVERAGE = {
     "SOL-PERP": 250,
@@ -109,7 +109,7 @@ def compute_leverage_recommendation(
     mode: str,
     market: str,
     balance: float,
-    operator_max_leverage: float = 70.0,
+    operator_max_leverage: float = 20.0,
 ) -> dict:
     """Compute recommended leverage via:
       - Base from conviction (1-10)
@@ -121,7 +121,7 @@ def compute_leverage_recommendation(
       * venue_max_leverage    = what Jupiter physically allows (250x on majors) — a
         FACT, surfaced so the real headroom is always visible.
       * operator_max_leverage = the owned recommendation ceiling (default 70, kept
-        <=70 by the meeting safeguard). The recommendation never exceeds this.
+        <=20 by the meeting safeguard). The recommendation never exceeds this.
     The user owns the recommendation ceiling; the venue owns the physical max.
 
     Returns full reasoning dict for packet transparency.
@@ -167,7 +167,7 @@ def compute_leverage_recommendation(
 
     # Two-tier cap: venue physical max (fact) vs operator-owned ceiling (the real bound).
     venue_max = VENUE_MAX_LEVERAGE.get(market, VENUE_MAX_LEVERAGE["_default"])
-    op_max    = float(operator_max_leverage or 70.0)
+    op_max    = float(operator_max_leverage or 20.0)
     effective_cap = min(op_max, venue_max)   # recommendation never exceeds the owned ceiling
 
     # Floor at 0 if conviction too low
@@ -187,7 +187,7 @@ def compute_leverage_recommendation(
     return {
         "recommended_leverage":  rec,
         "max_leverage_available": effective_cap,   # the bound that actually applies
-        "operator_max_leverage":  op_max,          # owned ceiling (meeting-controlled, <=70)
+        "operator_max_leverage":  op_max,          # owned ceiling (meeting-controlled, <=20)
         "venue_max_leverage":     venue_max,        # Jupiter physical max (informational)
         "size_rationale":         "; ".join(rationale_parts),
         "base_from_conviction":   base,
@@ -725,7 +725,7 @@ class PerpsEdgeAnalyzer(PacketAnalyzer):
         # tuned via meeting, else the 70 default). This bounds the recommendation; the
         # venue physical max (250x) is surfaced separately as context, not as the cap.
         _op_overrides = context.get("owner_overrides", {}) or context.get("operator_overrides", {}) or {}
-        _op_max_lev = float(_op_overrides.get("MAX_LEVERAGE") or 70.0)
+        _op_max_lev = float(_op_overrides.get("MAX_LEVERAGE") or 20.0)
         lev_info = compute_leverage_recommendation(
             conviction=conviction,
             vol_regime=vol_regime,

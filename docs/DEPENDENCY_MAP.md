@@ -70,6 +70,6 @@ Solana RPC (your `RPC_URL`; public mainnet as warden fallback), Jupiter (Perps p
 | **Telegram** | writes | silent if token is empty | effectively env-gated |
 
 ## 7. Money logic
-- **Execution:** only on an agent signal. Leverage from 10x up to `PERP_MAX_LEVERAGE` (70x default), collateral and a live price are hard gates; out-of-band requests are declined, never clamped.
+- **Execution:** only on an agent signal. Leverage from 10x up to `PERP_MAX_LEVERAGE` (20x default), collateral and a live price are hard gates; out-of-band requests are declined, never clamped.
 - **Exits:** TP, SL, trail and the exit floor are set on open and tuned per check with `update_params` (size, leverage and direction refused there). The exit floor warns before liquidation; the bot never auto-closes.
 - **Wallet:** it signs and sends real transactions with `PRIVATE_KEY` (solders + Jupiter Perps). Leave the key blank until you have read SETUP.md.

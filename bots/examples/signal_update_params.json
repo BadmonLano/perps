@@ -1,0 +1,1 @@
+{"action": "update_params", "market": "SOL-PERP", "reason": "ratchet: walk the stop up under the new higher low", "tp_pct": 3.0, "sl_pct": 0.8}

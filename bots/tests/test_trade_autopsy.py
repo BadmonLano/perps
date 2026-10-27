@@ -61,7 +61,7 @@ class Env:
                    "INBOX_PATH": self.inbox, "INBOX_RESULTS_DONE": self.done,
                    "PNL_FILE": os.path.join(self.logs, "perp_pnl.json"),
                    "PERP_PARAM_CHANGE_LOG": os.path.join(self.logs, "perps_param_changes.jsonl"),
-                   "TRAIL_ACTIVATE_PCT": 20, "PERP_MAX_LEVERAGE": 70.0, "_perp_get_override": lambda k, d: d,
+                   "TRAIL_ACTIVATE_PCT": 20, "PERP_MAX_LEVERAGE": 20.0, "_perp_get_override": lambda k, d: d,
                    "_news_lean_from_bucketed": lambda n: n.get("lean", "mixed"), "_perp_chain_news": lambda c: {"lean": "mixed"},
                    "_perp_ollama_generate": gen, "PERPS_OLLAMA_MODEL": "test-model", "_s27_save_json": save_json,
                    "_perp_brain_enabled": lambda: brain, "_PERP_LAST_LLM_SOURCE": "grok:mock",
@@ -77,7 +77,7 @@ class Env:
             else:
                 os.environ[k] = v
 
-    def trade(self, n=1, pnl=-30.0, lev=20, peak=None, hold=90, cat="closed", reason="agent close",
+    def trade(self, n=1, pnl=-30.0, lev=10, peak=None, hold=90, cat="closed", reason="agent close",
               events=None, lean="mixed", side="long", liquidated=False):
         o = datetime(2026, 10, 17, 9, 0, tzinfo=EST) + timedelta(hours=n)
         c = o + timedelta(minutes=hold)
@@ -120,7 +120,7 @@ class Rules(Base):
         self.assertEqual(self.rc(e, hold=8, events=[{"kind": "sl_hit"}])[0], "stop_too_tight")
         self.assertEqual(self.rc(e, events=[{"kind": "flip", "detail": "funding turned against"}])[0], "ignored_flip")
         self.assertEqual(self.rc(e, lean="bearish")[0], "thesis_wrong")
-        self.assertEqual(self.rc(e, lev=50)[0], "oversized")
+        self.assertEqual(self.rc(e, lev=15)[0], "oversized")
         self.assertEqual(self.rc(e)[0], "noise_within_plan")
 
     def test_macro_fees_news(self):
@@ -286,7 +286,11 @@ class Worker(Base):
         e = self.mk()
         e.ns["_TA_QUEUE"] = os.path.join(e.tmp, "queue_is_a_folder")
         os.makedirs(e.ns["_TA_QUEUE"])                        # appending to a folder fails on every OS
-        e.ns["perp_autopsy_enqueue"]({"timestamp": object()}, {"market": "SOL-PERP"})   # no exception
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):                 # the expected error is logged, not shown
+            e.ns["perp_autopsy_enqueue"]({"timestamp": object()}, {"market": "SOL-PERP"})   # no exception
+        self.assertIn("enqueue err", buf.getvalue())
 
 
 if __name__ == "__main__":

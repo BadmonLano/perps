@@ -2,19 +2,19 @@
 
 **Who this is for:** the agent setting Perps up for its owner. "You" is the agent; "the owner" is the human whose wallet and rules these are. Read this once, top to bottom, before the first start. The skills ship as tested defaults; change them only with the owner (section 8).
 
-> **It ships live.** Every signal you write is a real, leveraged Jupiter Perps transaction. Make sure the owner uses a burner wallet and understands the warning in the README before you start anything.
+> **It ships in paper mode** (`PERPS_DRY_RUN=true`): fills are simulated and nothing is signed. With `PERPS_DRY_RUN=false`, every signal you write is a real, leveraged Jupiter Perps transaction. Make sure the owner uses a burner wallet and understands the warning in the README before you start anything.
 
 > **The owner runs setup once by hand.** The first `python bots/perps.py` opens the setup wizard when `bots/.env` is missing or incomplete (section 1.1). Or copy `bots/.env.example` to `bots/.env` and fill the must-haves (section 0), or use the console's Settings and Brain Setup screens (`python bots/perps_ui.py`). After that, you (the agent) can change the rest through Settings or directives.
 
-## What's different from Meme Sniper
+## How Perps works, in short
 
-Perps follows Meme Sniper's layout and setup flow (same folders, same numbered sections, same automations and learnings loop). The differences:
+The key ideas before you start:
 
-- **Venue and markets:** Jupiter Perps only (SOL-PERP, BTC-PERP, ETH-PERP), leveraged, instead of spot memecoins. No token launches, no X scraper.
+- **Venue and markets:** Jupiter Perps only (SOL-PERP, BTC-PERP, ETH-PERP), leveraged.
 - **The bot never opens a trade on its own.** It writes one packet per chain; every open, add, tune or close is a signal the agent (or the owner) writes (`json_relay/perp_<chain>_signal.json`), and the bot gates it or declines with a reason. Packets and suggestions (such as `perp_exit_suggestion.json`) are for the agent to decide; the bot never acts on them.
-- **Leverage gates and ladder:** `PERP_MAX_LEVERAGE` and `PERP_LEV_LADDER` (section 4) replace Sniper's buy-size tiers.
-- **Feeds instead of scanners:** three outside lanes (Flow public data, Kalshi/Polymarket odds, news), each labelled with source, age and stale (section 9).
-- **Lanes:** `perps_lane` replaces `sniper_lane`; its drain cadence is derived from the feed and packet cadences (section 11).
+- **Leverage gates and ladder:** `PERP_MAX_LEVERAGE` and `PERP_LEV_LADDER` (section 4) set how much leverage a position may use.
+- **Feeds:** three outside lanes (Flow public data, Kalshi/Polymarket odds, news), each labelled with source, age and stale (section 9).
+- **Lanes:** `perps_lane` is the main agent loop; its drain cadence is derived from the feed and packet cadences (section 11).
 
 ## 0. Prerequisites
 
@@ -63,7 +63,7 @@ The setup wizard asks which plan you are on and sets `HELIUS_DAILY_CREDIT_CAP` t
 
 Unset (for example a non-interactive first run) = the Free cap, 30,000. `HELIUS_CAP_MODE` = `soft` (default; restrict at `HELIUS_SOFT_CAP_PCT`, 80%), `hard` (at 100%) or `log` (count only). Change it any time with the wizard (RPC area) or in `bots/.env`.
 
-Typical use, from our own metering: Perps alone about 10k-300k credits/month; Meme Sniper about 0.15M-1.05M/month (the high end is 24/7 scanning); both about 0.2M-1.4M/month. Free fits Perps and a lean Sniper; pick Developer for a 24/7 Sniper.
+Typical use, from our own metering: Perps about 10k-300k credits/month, so the Free plan fits. If the same RPC key also serves other bots, size the plan for all of them.
 
 ## 1. Install and launch
 
@@ -145,7 +145,7 @@ This is configuration, not approval. Walk the owner through `bots/.env.example`:
 - `NEW_POSITIONS_ENABLED` (tuner, default true): false = every long, short and add the agent sends is declined (reason `new_positions_off`); closes, adjust, `update_params`, `close_pct` and `pull_initial` still work, and packets keep coming. The bot never opens a trade on its own either way.
 - `ENTRY_ALERTS_ENABLED` (tuner, default true): false = the intel scanner sends no entry alerts. Nothing else changes.
 - `AUTO_TRADE_ENABLED` is deprecated: if it is still in `bots/.env` or the saved tuner defaults and the two new keys are not, it sets both (a one-line deprecation note is logged).
-- Leverage runs from 10x up to `PERP_MAX_LEVERAGE` (70x by default, also when unset; never above the 250x venue max); anything outside is declined, never clamped. Optional `PERP_MAX_COLLATERAL_SOL` caps collateral per position and size at that collateral x the leverage cap; blank or 0 = no extra cap beyond the wallet and risk rules. These are the only leverage/size gates, there is no separate hard-coded envelope. A signal without leverage gets it from `PERP_LEV_LADDER` (default `0.1:40,1:25,10:15,50:10`: less collateral, more leverage).
+- Leverage runs from 10x up to `PERP_MAX_LEVERAGE` (20x by default, also when unset; never above the 250x venue max); anything outside is declined, never clamped. Optional `PERP_MAX_COLLATERAL_SOL` caps collateral per position and size at that collateral x the leverage cap; blank or 0 = no extra cap beyond the wallet and risk rules. These are the only leverage/size gates, there is no separate hard-coded envelope. A signal without leverage gets it from `PERP_LEV_LADDER` (default `0.1:20,1:15,10:12,50:10`: less collateral, more leverage).
 - `rules/rules.md` (section 7) sets the owner's own limits: max size, max leverage, no-trade hours, loss limits.
 
 ## 5. Models
@@ -218,7 +218,7 @@ Nothing to sign up for. In `bots/.env`:
 - `FLOW_STALE_MIN` (120), `NEWS_STALE_MIN` (180): older data is flagged stale, not dropped.
 - `FEED_FAIL_LIMIT` (2), `FEED_FAILBACK_COOLDOWN_MIN` (10): failover to the next source and retry of the primary.
 - `KALSHI_DAILY_CLOSE_HOUR_ET` (17): the end-of-day ladder close.
-- `FLOW_EDITOR_PREFIX` (set in `.env.example`): the upstream prefix of Flow's two editorial files; blank skips them.
+- `FLOW_EDITOR_PREFIX` (blank by default): the file prefix your Flow feed uses for its two editorial files (`<prefix>_thesis`, `mechanical_vs_<prefix>`). Blank skips those two; every other Flow lane works without them. The bot renames them to neutral fields (`editorial_thesis`, `editorial_vs_mechanical`).
 - Macro prints (released CPI numbers in every packet as `macro_prints`): no key needed. Optional `BLS_API_KEY` (free, https://data.bls.gov/registrationEngine/) raises the BLS limit; optional `FRED_API_KEY` is the fallback when BLS refuses. `MACRO_BLS_DAILY_MAX` (12) caps fetches per day. Test: `python bots/feeds/macro_fetcher.py`.
 - Test once: `python bots/feeds/feed_router.py pull` then `python bots/feeds/feed_router.py packet SOL`.
 

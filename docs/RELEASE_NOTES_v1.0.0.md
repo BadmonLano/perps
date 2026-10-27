@@ -10,7 +10,7 @@ First public release.
 - Prices from the same Pyth oracle Jupiter validates against, resolved live from the pool's custody accounts. If that read fails, trading halts with an alert instead of falling back to the old oracle map.
 - Owner positions: positions you open by hand get tagged, and you choose manage or leave.
 - Optional brain (Grok, Ollama, or off), optional Telegram alerts and owner commands.
-- Sub-bots: security_warden, agent_autoagent, code_tuner, learnings_writer.
+- Sub-bots: security_warden, agent_autoagent, code_tuner, learnings_writer, plus owner_commands when `OWNER_COMMANDS` is not `off`.
 - Console with live dashboard, logs and archives.
 
 Leverage liquidates. Read the risk notes in README before going live.

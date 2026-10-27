@@ -77,8 +77,8 @@ FIELDS = {
     "FLOW_BASE_URL": ("Flow Data URL", False, "https://theflowcycle.com/data", "url"),
     "NEW_POSITIONS_ENABLED": ("Allow New Positions (Opens And Adds From Agent Signals)", False, "on", "tuner"),
     "ENTRY_ALERTS_ENABLED": ("Entry Alerts (Intel Scanner Setups)", False, "on", "tuner"),
-    "PERP_MAX_LEVERAGE": ("Max Leverage Cap (10-250x)", False, "70", "lev"),
-    "PERP_LEV_LADDER": ("Leverage Ladder (Collateral SOL:Leverage, Less Collateral = More Leverage)", False, "0.1:40,1:25,10:15,50:10", "ladder"),
+    "PERP_MAX_LEVERAGE": ("Max Leverage Cap (10-250x)", False, "20", "lev"),
+    "PERP_LEV_LADDER": ("Leverage Ladder (Collateral SOL:Leverage, Less Collateral = More Leverage)", False, "0.1:20,1:15,10:12,50:10", "ladder"),
     "PERP_LIQ_WARN_PCT": ("Liquidation Warning Distance (% Of Price, Once Per Position)", False, "5", "text"),
     "PERP_SL_WARN_PCT": ("SL Warning Distance (% Of Price, Once Per Position)", False, "0.5", "text"),
     "PERP_ONE_PER_MARKET": ("One Position Per Market (true = a long blocks a short; false = long + short as separate positions, what Jupiter allows)", False, "false", "onoff"),
@@ -202,7 +202,7 @@ def ask_helius_plan(io, cur: dict):
     now = str(cur.get(CAP_KEY) or "").strip()
     io.con.print("[dim]Helius bills in credits. The bot meters its own Helius calls and slows background "
                  "reads near a daily cap so one bad day cannot burn the month. Perps alone uses about "
-                 "10k-300k credits/month; with the Meme Sniper about 0.2M-1.4M. Not on Helius? Pick Free.[/]")
+                 "10k-300k credits/month. Not on Helius? Pick Free.[/]")
     opts = []
     for i, (k, name, cap, desc) in enumerate(HELIUS_PLANS, 1):
         io.con.print(f"  {i}. {name} [dim]({desc}) -> {cap:,}/Day[/]")
@@ -478,9 +478,9 @@ def _valid(key: str, kind: str, v: str) -> str | None:
         try:
             pts = [tuple(float(x) for x in part.split(":")) for part in v.replace(";", ",").split(",") if part.strip()]
             ok = pts and all(len(t) == 2 and t[0] > 0 and 10 <= t[1] <= 250 for t in pts)
-            return None if ok else "Use collateral_sol:leverage pairs, e.g. 0.1:40,1:25,10:15,50:10"
+            return None if ok else "Use collateral_sol:leverage pairs, e.g. 0.1:20,1:15,10:12,50:10"
         except ValueError:
-            return "Use collateral_sol:leverage pairs, e.g. 0.1:40,1:25,10:15,50:10"
+            return "Use collateral_sol:leverage pairs, e.g. 0.1:20,1:15,10:12,50:10"
     if kind == "onoff":
         return None if v.strip().lower() in ("true", "false", "on", "off", "1", "0", "yes", "no") else "Enter true Or false"
     if kind == "cadence":

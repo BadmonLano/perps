@@ -63,7 +63,7 @@ P["errors"] = P["logs"] / "perps_ui_errors.log"
 P["console"] = P["logs"] / "perps.console.log"
 
 GREEN, PURPLE, BG = "#39FF14", "#8A2BE2", "#000000"
-VERSION = "v1.0"
+VERSION = "v1.0.1"
 TAGLINE = "Long it, short it, let the agent manage it."
 WORDMARK = [
     "\u2588\u2580\u2588 \u2588\u2580\u2580 \u2588\u2580\u2588 \u2588\u2580\u2588 \u2588\u2580\u2580",
@@ -77,7 +77,7 @@ SKILL_DIRS = ("perps-boss", "pnl-tracker", "forensics", "sub-skills")
 LLM_CHOICES = ("grok", "ollama", "off")
 LLM_LABEL = {"grok": "Grok (Cloud)", "ollama": "Ollama (Local)", "off": "Off"}
 # The *.console.log files are written by bots/perps.py (it starts the sub-bots); the rest are each sub-bot's own logs.
-# Sub-bot log tabs (letter keys, same scheme as the Sniper UI): (key, label, file or (files...)) under bot_logs/.
+# Sub-bot log tabs (letter keys): (key, label, file or (files...)) under bot_logs/.
 SUBBOT_LOG_SOURCES = [
     ("w", "Warden", "security_warden.console.log"),
     ("a", "Autoagent", "agent_autoagent.console.log"),
@@ -573,7 +573,7 @@ def dashboard_view():
 
 # ── logs ─────────────────────────────────────────────────────────────────────
 def log_sources() -> list:
-    """Tabs mirror the Sniper UI: digits for core logs, letters for sub-bots, shown as [K] Name."""
+    """Tabs: digits for core logs, letters for sub-bots, shown as [K] Name."""
     L = P["logs"]
     src = [("1", "Perps Console", "ring"),
            ("2", "Trades", L / _book("perp_pnl.json")),
@@ -591,7 +591,7 @@ def log_sources() -> list:
 
 
 LOG_TAB_HELP = "1-6 I R F W A T E C K L"
-LOG_HISTORY = 5000          # lines kept per tab (same as the Sniper UI)
+LOG_HISTORY = 5000          # lines kept per tab
 LOGV: dict = {}             # tab -> {"off": lines up from the bottom, "q": search, "hit": line index}
 LOGCACHE: dict = {}         # tab -> (time, lines), refreshed every ~2s
 LOG_EMPTY = {
@@ -763,7 +763,7 @@ def log_find(sel: str, forward: bool) -> None:
 
 
 def logs_view(sel: str, height: int, width: int = 160):
-    """Same layout as the Sniper UI: tab panel (help in subtitle), body, status line with LIVE/PAUSED."""
+    """Layout: tab panel (help in subtitle), body, status line with LIVE/PAUSED."""
     box, Align, Group, Panel, Table, Text = _rich()
     srcs = log_sources()
     tabs = Text()
@@ -795,7 +795,7 @@ def logs_view(sel: str, height: int, width: int = 160):
 
 
 def log_scroll(sel: str, k: str, page: int = 10) -> bool:
-    """Sniper key semantics: Up/PgUp go back in time, Home = top (oldest), End = follow (LIVE)."""
+    """Keys: Up/PgUp go back in time, Home = top (oldest), End = follow (LIVE)."""
     v = LOGV.setdefault(sel, {"off": 0, "q": "", "hit": None})
     if k == "up":
         v["off"] += 1

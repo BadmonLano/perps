@@ -32,14 +32,14 @@ of 12.5 SOL. A 2% move against you is near liquidation.
 
 ### Leverage Ladder (less collateral, more leverage)
 The smaller the stake, the higher the leverage; it drops as collateral rises, and it never
-goes above the owner's cap `PERP_MAX_LEVERAGE` (bots/.env; 70x by default, also when unset; settable 10x-250x). Defaults
+goes above the owner's cap `PERP_MAX_LEVERAGE` (bots/.env; 20x by default, also when unset; settable 10x-250x). Defaults
 (`PERP_LEV_LADDER` in bots/.env, `collateral_sol:leverage`, log-interpolated between steps):
 
 | Collateral | Leverage | Notional |
 |---|---|---|
-| 0.1 SOL | 40x | 4 SOL |
-| 1 SOL | 25x | 25 SOL |
-| 10 SOL | 15x | 150 SOL |
+| 0.1 SOL | 20x | 2 SOL |
+| 1 SOL | 15x | 15 SOL |
+| 10 SOL | 12x | 120 SOL |
 | 50 SOL | 10x | 500 SOL |
 
 Leave `leverage` out of an open and the bot uses the ladder for the collateral you gave

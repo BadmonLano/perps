@@ -90,6 +90,20 @@ for _pth in (WS_SUB_BOTS, os.path.dirname(os.path.abspath(__file__))):
         _ws_sys.path.insert(0, _pth)
 # ──────────────────────────────────────────────────────────────────────────
 
+# ── Command line (--help / --version exit before anything starts) ───────────
+if __name__ == "__main__":
+    import argparse as _ap
+    _parser = _ap.ArgumentParser(
+        prog="perps.py",
+        description="Perps engine: Jupiter Perps (SOL/BTC/ETH) packets, gates and execution for your SI agent. "
+                    "Paper mode by default (PERPS_DRY_RUN=true in bots/.env): nothing is signed or sent.",
+        epilog="No flags: run the setup wizard if bots/.env is missing or incomplete, then start the engine, "
+               "console and sub-bots (Ctrl+C stops everything). Console only: python bots/perps_ui.py. "
+               "Docs: README.md and SETUP.md.")
+    _parser.add_argument("--setup", action="store_true", help="run the setup wizard, write bots/.env and exit")
+    _parser.add_argument("--version", action="version", version="Perps v1.0.1")
+    _parser.parse_known_args()
+
 # ── First-run setup wizard (bots/perps_setup.py) ─────────────────────────────
 # Runs before bots/.env is loaded: setup.json (agent) is applied, a complete .env is left
 # alone, an incomplete or missing one opens the wizard in a terminal.
@@ -226,7 +240,7 @@ PERPS_DRY_RUN    = str(os.getenv("PERPS_DRY_RUN", "false")).strip().lower() in (
 # AsyncClient / anchorpy traffic goes through solana-py's HTTP provider, so one
 # hook covers every read and send. Numbers are ESTIMATES from the cost table
 # (HELIUS_CREDIT_COSTS); compare with the Helius dashboard.
-# Written to bot_logs/perps_helius_meter.json (same shape as Sniper's helius_meter.json).
+# Written to bot_logs/perps_helius_meter.json .
 # The cap NEVER blocks a trade, a close, or a position-safety read. When it trips,
 # only background reads slow down: the shared mark-price cache for the owner
 # loop / limit watcher stretches to PERP_MARK_CACHE_CAPPED_S, and the hourly
@@ -398,7 +412,7 @@ if PERPS_DRY_RUN:
         PRIVATE_KEY = str(Keypair())
     print("=" * 64 + "\n PAPER MODE (PERPS_DRY_RUN=true): no transaction will be signed or sent.\n"
           " Paper positions: bot_logs/paper_perp_positions.json  P/L: bot_logs/paper_perp_pnl.json\n" + "=" * 64)
-MAX_LEVERAGE       = 100.0     # legacy reference value only; the live leverage gate is PERP_MAX_LEVERAGE below (unset = 70x)
+MAX_LEVERAGE       = 100.0     # legacy reference value only; the live leverage gate is PERP_MAX_LEVERAGE below (unset = 20x)
 
 # ── MINIMUM OPENING — the owner's ruling 2026-07-26 ──────────────────────────────
 # The 2026-07-26 SOL long was RIGHT (panic floor, held 47h, thesis paid) and
@@ -411,7 +425,7 @@ MAX_LEVERAGE       = 100.0     # legacy reference value only; the live leverage 
 # DECLINE, NEVER CLAMP — "what he requests is what gets landed."
 PERP_MIN_COLLATERAL_USD = 10.0
 PERP_MIN_LEVERAGE       = 10.0
-PERP_MAX_LEVERAGE       = min(250.0, max(10.0, float(_envv("PERP_MAX_LEVERAGE") or 70.0)))  # user cap (bots/.env); unset = 70x, same as .env.example and the wizard; clamped to 10x..250x venue max
+PERP_MAX_LEVERAGE       = min(250.0, max(10.0, float(_envv("PERP_MAX_LEVERAGE") or 20.0)))  # user cap (bots/.env); unset = 20x, same as .env.example and the wizard; clamped to 10x..250x venue max
 # Optional per-position collateral cap in SOL (bots/.env). Unset or 0 = no extra cap beyond the wallet and risk rules.
 try:
     PERP_MAX_COLLATERAL_SOL = float(_envv("PERP_MAX_COLLATERAL_SOL") or 0) or None
@@ -700,7 +714,7 @@ def _lu_reload_now():
         except Exception:
             pass
         os._exit(globals().get("PERPS_RELOAD_EXIT_CODE", 75))
-    # 2026-10-16: reload exactly like Meme Sniper - os.execv in the SAME
+    # 2026-10-16: reload via os.execv in the SAME
     # window (no new console). Sub-bots were stopped above; the new process starts
     # them again at boot and re-adopts positions from perp_positions.json.
     try:
@@ -1130,7 +1144,7 @@ JUPITER_PERPS_MAX_SLIPPAGE_BPS      = 50
 JUPITER_MAX_LEVERAGE       = PERP_MAX_LEVERAGE   # follows the user cap (bots/.env PERP_MAX_LEVERAGE); not a separate gate
 # Jupiter's PHYSICAL max leverage (250x on majors as of 2026). This is a FACT about
 # the venue — informational, shown on boot so the real headroom is visible. It is NOT
-# the operational cap: that is PERP_MAX_LEVERAGE (bots/.env, unset = 70x). Two-tier:
+# the operational cap: that is PERP_MAX_LEVERAGE (bots/.env, unset = 20x). Two-tier:
 # the owner's cap gates every signal; the venue owns the physical max.
 JUPITER_VENUE_MAX_LEVERAGE = 250.0
 JUPITER_MAX_POSITION_USD   = 500.0     # DEAD as a gate (kept for old references). The live caps are PERP_MAX_LEVERAGE and the optional PERP_MAX_COLLATERAL_SOL, applied in route_open_position and execute_position_add. Do not revive this flat usd ceiling.
@@ -1399,7 +1413,7 @@ def _perp_signal_schema_errors(data, opening):
 def _perp_lev_ladder():
     """PERP_LEV_LADDER: 'collateral_sol:leverage,...' (less collateral -> more leverage).
     Resolution: saved/active override > bots/.env > default. Sorted by collateral."""
-    raw = _perp_get_override("PERP_LEV_LADDER", None) or os.getenv("PERP_LEV_LADDER") or "0.1:40,1:25,10:15,50:10"
+    raw = _perp_get_override("PERP_LEV_LADDER", None) or os.getenv("PERP_LEV_LADDER") or "0.1:20,1:15,10:12,50:10"
     pts = []
     try:
         for part in str(raw).replace(";", ",").split(","):
@@ -1408,7 +1422,7 @@ def _perp_lev_ladder():
                 pts.append((float(a), float(b)))
     except Exception:
         pts = []
-    return sorted(pts) or [(0.1, 40.0), (1.0, 25.0), (10.0, 15.0), (50.0, 10.0)]
+    return sorted(pts) or [(0.1, 20.0), (1.0, 15.0), (10.0, 12.0), (50.0, 10.0)]
 
 
 def _perp_lev_for_collateral_sol(col_sol):
@@ -6511,7 +6525,7 @@ async def route_open_position(
         return None, "none"
 
     # Risk caps: DECLINE, do not clamp. Derived from the user's settings (bots/.env):
-    # leverage <= PERP_MAX_LEVERAGE (unset = 70x; never above the 250x venue max),
+    # leverage <= PERP_MAX_LEVERAGE (unset = 20x; never above the 250x venue max),
     # collateral <= PERP_MAX_COLLATERAL_SOL when set, and size <= that collateral x the
     # leverage cap. With PERP_MAX_COLLATERAL_SOL unset there is no extra collateral or
     # size cap beyond the wallet and the risk rules.
@@ -16301,7 +16315,7 @@ def _ta_rules(b):
     try:
         cap = float(_perp_get_override("PERP_MAX_LEVERAGE", PERP_MAX_LEVERAGE))
     except Exception:
-        cap = 70.0
+        cap = 20.0
     if lev and lev >= 0.6 * cap:
         return "oversized", [f"{lev:g}x is {lev / cap:.0%} of the {cap:g}x cap", f"closed {pnl:+.1f}%"]
     fz = b.get("fees") or {}

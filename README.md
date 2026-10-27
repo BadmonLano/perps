@@ -11,17 +11,31 @@ Perps is a Solana perpetuals trading system for Jupiter Perps (SOL, BTC, ETH) th
 **Who it's for:** people who already run an SI agent that can read files, run Python and keep a loop going (an always-on hosted agent, or a local agent on your PC), and who understand leveraged perpetuals and their risks.
 
 > [!WARNING]
-> **This bot trades real money with leverage. Read this before you run anything.**
-> - **Live by default.** Every signal the agent (or the owner) writes is signed and sent as a real Jupiter Perps transaction: opens, adds, adjusts and closes. The bot never trades on its own: it only executes those signals, and the packets and suggestions it writes are for the agent to decide.
-> - **Leverage liquidates.** Positions run from 10x up to your cap, `PERP_MAX_LEVERAGE` (70x by default). When a signal leaves leverage out, the ladder `PERP_LEV_LADDER` picks it by collateral: 40x from 0.1 SOL, 25x from 1 SOL, 15x from 10 SOL, 10x from 50 SOL. A small move against you can liquidate the collateral completely.
+> **Paper by default; real money with leverage once you switch it live. Read this before you go live.**
+> - **Paper by default.** Out of the box (`PERPS_DRY_RUN=true`) every fill is simulated at the live oracle price and nothing is signed or sent. Only when you set `PERPS_DRY_RUN=false` does every signal the agent (or the owner) write become a real Jupiter Perps transaction: opens, adds, adjusts and closes. Either way the bot never trades on its own: it only executes those signals.
+> - **Leverage liquidates.** Positions run from 10x up to your cap, `PERP_MAX_LEVERAGE` (20x by default). When a signal leaves leverage out, the ladder `PERP_LEV_LADDER` picks it by collateral: 20x from 0.1 SOL, 15x from 1 SOL, 12x from 10 SOL, 10x from 50 SOL. You can raise the cap (up to the 250x venue max), but start low. A small move against you can liquidate the collateral completely.
 > - **Use a burner hot wallet** that holds only what you can afford to lose completely. Never use your main wallet or a wallet with other assets.
 > - **The gates reduce risk; they do not remove it.** Bugs, RPC failures, stale feeds and bad model output can lose money.
 > - **Not financial advice.** This is experimental software provided as-is under the MIT license, with no warranty. You are responsible for every transaction it sends.
 
+## Glossary
+
+- **SI agent:** your AI agent (hosted or local) that reads packets, decides and writes signals. The bot never decides.
+- **Packet:** a JSON snapshot the bot writes to `inbox/` per chain (price, funding, open interest, your position, feeds) for the agent to read.
+- **Signal:** the agent's answer, a JSON file in `json_relay/` (open, add, update_params, close). See [Signals](#signals-what-the-agent-writes).
+- **json_relay/:** the hand-off folder for signals, feed requests and bot-to-bot files.
+- **Lane:** one recurring agent job (cron/routine) that drains one kind of packet, from `automations/`; `perps_lane` is the main one.
+- **Gates:** hard checks on every signal (leverage band, collateral cap, live price, monitor running). A signal that fails one is declined, never resized.
+- **Ratchet:** moving the stop and take-profit up (down on a short) as price makes new structure, so gains get locked in.
+- **Peel:** a partial close (`close_pct`), usually 30-40% at the first target; the rest rides as the runner.
+- **Exit floor:** a price level that triggers an alert so the agent can protect profit. The bot alerts; it never auto-closes.
+- **Flow:** a free public crypto data feed ([theflowcycle.com](https://theflowcycle.com)): per-coin calls, cycle, risk and news. One of three feed lanes.
+- **Paper mode:** `PERPS_DRY_RUN=true`, simulated fills, nothing signed. The default.
+
 ## Features
 
 - **Per-chain packets:** SOL, BTC and ETH, each with price, funding, open interest, the open position and the feed lanes.
-- **Hard gates** on every signal: leverage between 10x and your cap (`PERP_MAX_LEVERAGE`, 70x by default), collateral (optional `PERP_MAX_COLLATERAL_SOL` cap, which also caps size at collateral x leverage cap), live price. Out-of-band requests are declined, never clamped.
+- **Hard gates** on every signal: leverage between 10x and your cap (`PERP_MAX_LEVERAGE`, 20x by default), collateral (optional `PERP_MAX_COLLATERAL_SOL` cap, which also caps size at collateral x leverage cap), live price. Out-of-band requests are declined, never clamped.
 - **Per-check tuning:** on every position check the agent can move TP, SL, trail and exit floor with `update_params`; every change is logged.
 - **Exit floor and liquidation watch:** alerts before liquidation; the bot never auto-closes.
 - **Feeds:** Flow public data, live Kalshi and Polymarket odds, and news, each labelled with source, age and stale flag.
@@ -32,7 +46,21 @@ Perps is a Solana perpetuals trading system for Jupiter Perps (SOL, BTC, ETH) th
 - **Console:** live dashboard, logs, settings, skills, owner commands and brain setup.
 - **Optional SI brain:** Grok or local Ollama for summaries; trading works the same with it off.
 
-## Paper mode (start here)
+## Paper quick start (no wallet, no keys)
+
+```
+git clone https://github.com/BadmonLano/perps.git
+cd perps
+python3 -m venv .venv
+source .venv/bin/activate                 # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp bots/.env.example bots/.env            # Windows: copy bots\.env.example bots\.env
+python bots/perps.py
+```
+
+`bots/.env.example` ships with `PERPS_DRY_RUN=true`, so this starts in paper mode and the console shows PAPER MODE. The setup wizard then opens: press Enter to skip the wallet key and every optional key; paper mode needs none of them. It does need an RPC for live prices: paste the free public `https://api.mainnet-beta.solana.com` (or a free Helius URL) when it asks for `RPC_URL`, and pick Free or None for the Helius plan. Then write a test signal (see [Signals](#signals-what-the-agent-writes)) and watch it fill on the paper book. `python bots/perps.py --help` lists the flags without starting anything.
+
+## Paper mode
 
 `PERPS_DRY_RUN=true` is the default in `bots/.env.example` and the recommended first run. In paper mode:
 
@@ -42,7 +70,27 @@ Perps is a Solana perpetuals trading system for Jupiter Perps (SOL, BTC, ETH) th
 - The live book (`perp_positions.json`, `perp_pnl.json`) and any real wallet positions are never touched. Owner-position scanning is off.
 - Partial reduces via `adjust` are not simulated; use `close_pct`.
 
-Run at least one full trade with your SI in paper mode. To go live, set `PERPS_DRY_RUN=false` (console: Settings, or edit `bots/.env`), add your burner wallet key, and restart Perps.
+Run at least one full trade with your SI in paper mode. To go live, set `PERPS_DRY_RUN=false` (console: Settings, or edit `bots/.env`), add your burner wallet key and RPC, and restart Perps.
+
+## Signals (what the agent writes)
+
+The agent answers a packet with one small JSON file, `json_relay/perp_<chain>_signal.json`. The bot gates it, then fills it or declines it with a reason in `bot_logs/perp_signal_acks/acks.jsonl`. Three examples (also in [`bots/examples/`](bots/examples/)):
+
+```json
+{"action": "long", "market": "SOL-PERP", "reason": "SOL holding the 4h higher low", "perps_is_order": true, "collateral_usd": 11.0, "tp_pct": 2.0, "sl_pct": 1.0}
+{"action": "update_params", "market": "SOL-PERP", "reason": "ratchet: stop under the new higher low", "tp_pct": 3.0, "sl_pct": 0.8}
+{"action": "close", "market": "SOL-PERP", "reason": "thesis invalidated"}
+```
+
+Easiest is the helper, which writes the file safely and waits for the ack:
+
+```
+python bots/tools/send_signal.py --market SOL --action long --collateral-usd 11 --tp-pct 2 --sl-pct 1 --reason "why" --wait
+python bots/tools/send_signal.py --market SOL --action update_params --tp-pct 3 --sl-pct 0.8 --reason "ratchet" --wait
+python bots/tools/send_signal.py --market SOL --action close --reason "done" --wait
+```
+
+How the agent manages a trade (the ratchet: walk the stop and take-profit up on structure, peel 30-40% at the first trim, let the runner ride, one add at most, close everything if the thesis dies) is written out in [`skills/perps-boss/SKILL.md`](skills/perps-boss/SKILL.md).
 
 ## Stop and take-profit protection
 
@@ -67,15 +115,15 @@ All settings live in `bots/.env` (copy `bots/.env.example`, or run the setup wiz
 - **Python 3.12+**. `pip install -r requirements.txt` installs rich, tzdata, httpx, python-dotenv, solders, solana, anchorpy, base58 and Pillow. Windows needs `tzdata` or every bot exits on start.
 - **Ollama (optional):** local fallback brain. `ollama pull qwen3:14b-q4_K_M` (text, about 10 GB RAM/VRAM).
 - **No Node.js** or other runtime. Everything is Python.
-- **OS:** tested on Windows 10/11; macOS and Linux should work but are untested. On Windows use **Windows Terminal** for the colours and layout of the console.
-- **Git** to clone (`git clone <repo-url>`); a computer that stays on (trading pauses when it sleeps).
+- **OS:** Windows 10/11 and Linux (the tests and console smoke check pass on both); macOS should work. On Windows use **Windows Terminal** for the colours and layout of the console.
+- **Git** to clone (`git clone https://github.com/BadmonLano/perps.git`); a computer that stays on (trading pauses when it sleeps).
 - **Text editor (optional):** the console opens files in `EDITOR` if set, else Notepad (Windows) or nano.
 
 **Accounts and keys** (all go in `bots/.env`, template `bots/.env.example`)
 
 | Needed | What for |
 |---|---|
-| A new **burner Solana wallet** (`PRIVATE_KEY`) | signs every open, add, adjust and close |
+| A new **burner Solana wallet** (`PRIVATE_KEY`) | live mode only: signs every open, add, adjust and close (paper mode needs none) |
 | A **Solana RPC**, Helius recommended (`RPC_URL`; `HELIUS_API_KEY` optional, used by the warden). The setup wizard asks your Helius plan and sets a daily credit cap (Free = 30k/day; SETUP.md 0.2) | chain reads and sends |
 
 | Optional | What for |
@@ -96,8 +144,8 @@ Requires **Python 3.12+**.
 Use a virtual environment (newer Linux/macOS Pythons refuse a system-wide `pip install`). On Windows the command is `python` (or `py -3.12`); on macOS/Linux it is `python3`. Inside an activated venv, `python` works everywhere.
 
 ```
-git clone <repo-url> Perps
-cd Perps
+git clone https://github.com/BadmonLano/perps.git
+cd perps
 python3 -m venv .venv
 source .venv/bin/activate                 # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -106,7 +154,7 @@ python bots/perps.py
 
 Check `python --version` says 3.12 or newer first; the bot exits with a clear message on older Pythons. Windows PowerShell blocks `activate` by default: run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or use Command Prompt.
 
-On the first start the **setup wizard** asks for the wallet key, RPC and the rest, writes `bots/.env` and starts the bot. A complete `.env` skips it. Re-run it any time with `python bots/perps.py --setup` (runs the wizard and exits). Prefer to edit by hand? `copy bots\.env.example bots\.env` (macOS/Linux: `cp`) and fill it in.
+On the first start the **setup wizard** asks for the wallet key, RPC and the rest (in paper mode press Enter to skip the key), writes `bots/.env` and starts the bot. A complete `.env` skips it. Re-run it any time with `python bots/perps.py --setup` (runs the wizard and exits); `--help` lists the flags. Prefer to edit by hand? `copy bots\.env.example bots\.env` (macOS/Linux: `cp`) and fill it in.
 
 `bots/perps.py` opens the console in this window and starts the sub-bots (security_warden, agent_autoagent, code_tuner, learnings_writer, and owner_commands when `OWNER_COMMANDS` is not `off`) as child processes. One Ctrl+C, or **8 Stop Perps** in the console, stops everything. `python bots/perps_ui.py` opens the console only, without starting anything.
 
@@ -114,7 +162,7 @@ Full walkthrough: **[SETUP.md](SETUP.md)**. Skills and how an agent should load 
 
 ## Agent setup (required)
 
-The bot never decides anything on its own: it writes packets to `inbox/` and waits. **The agent MUST create recurring jobs (cron, scheduled routine, heartbeat) from `automations/`**: `perps_lane` (main, drains signals and tunes TP/SL), plus `warden_lane`, `misc_lane`, `morning_brief` and the nightly self-eval (`learnings/nightly_self_eval.automation.md`) on their own schedules. Drain perps_lane at least as often as the fastest producer (`FEED_CADENCE`, the packet cadence, the 15-min scan), floored at 5 min and capped at 30, and re-gauge when a cadence changes. Stagger start minutes so no two lanes fire together, e.g. perps_lane `3-53/10 * * * *`, warden `7,27,47 * * * *`, misc `9,24,39,54 * * * *`, morning_brief `15 7 * * *`, nightly self-eval `30 23 * * *`. The wizard prints a suggested interval when it finishes. Details and the run-once check: [SETUP.md section 11](SETUP.md#11-build-your-automations).
+The bot never decides anything on its own: it writes packets to `inbox/` and waits. **The agent MUST create recurring jobs (cron, scheduled routine, heartbeat) from `automations/`**: `perps_lane` (the main loop: drains packets, sends signals, tunes TP/SL) plus `warden_lane`, `misc_lane`, `morning_brief` and the nightly self-eval. Schedules, how often to drain and an example staggered crontab: [SETUP.md section 11](SETUP.md#11-build-your-automations).
 
 ## How it fits together
 
@@ -176,6 +224,3 @@ None of these touch the wallet; all run offline.
 - [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [TIMELINE.md](TIMELINE.md)
 - License: [MIT](LICENSE)
 
-## Credits
-
-This system was built with the help of Jordan, the SI agent that worked on it alongside its owner. If the name Jordan turns up (for example in the Flow feed reference), that is who it means.

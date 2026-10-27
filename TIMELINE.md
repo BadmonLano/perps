@@ -2,7 +2,18 @@
 
 Version history, newest first.
 
-## v1.0.1 (2026-10-17)
+## v1.0.1 (2026-10-27)
+- README: paper mode is the stated default (live only with `PERPS_DRY_RUN=false`), a paper quick start with no wallet, a glossary, example signals and `send_signal.py` usage, the real clone URL, Linux noted as working. Cron detail moved to SETUP.md section 11.
+- `python bots/perps.py --help` / `--version` print and exit without starting the engine.
+- Example signals in `bots/examples/` (open, update_params, close).
+- Default leverage cap lowered from 70x to 20x (`PERP_MAX_LEVERAGE`), ladder `0.1:20,1:15,10:12,50:10`. Existing `bots/.env` values are unchanged.
+- `FLOW_EDITOR_PREFIX` now blank by default (skips Flow's two editorial files) and documented.
+- Standalone docs: no references to other, unreleased projects.
+
+## v1.0.0 (2026-10-27): first public GitHub release
+
+Includes paper mode, the oracle halt and the open/add guards, plus everything below from 2026-10-17.
+
 - `macro_prints` in every chain packet: released US CPI (headline / core y/y, m/m, gasoline) from Flow + the public BLS API, FRED mirror fallback, cached in `bot_logs/macro_prints.json`, with an optional one-line SI read. Optional `BLS_API_KEY` / `FRED_API_KEY`.
 - News: macro headlines (CPI, inflation, Fed, jobs, yields) rank first, then newest, before the per-chain cut; `macro` flag and count per item. Inflation headlines read hot = bearish for risk.
 - Morning brief falls back to the macro snapshot + daily read for regime and leverage recommendation when the morning thesis is missing.
@@ -12,7 +23,7 @@ Version history, newest first.
 - Parked limit entries now fire: `limit_long` / `limit_short` (or `order_type: limit`) more than 1% away park in `bot_logs/perp_limit_order.json` (ack `parked`); the main loop polls that market's mark price and sends a normal market open through every gate when the target is reached. One-shot (no double fill), expiry (`expires_in_min`, default 24h `PERP_LIMIT_TTL_HOURS`), ack + Telegram for parked / filled / declined / expired. Previously parked orders were never fired.
 - Trade autopsy: every losing close (`AUTOPSY_ON=loss|all|off`) gets one review: verdict, root cause (fixed list), evidence, one lesson, optional proposal. SI brain first (cost guard `AUTOPSY_SI_MAX_PER_DAY`, default 6), rule-based offline fallback. Output: `bot_logs/perp_trade_autopsies.jsonl`, an inbox packet and one learnings entry. Queue + background worker, isolated from the close path; one review per position. Positions now carry `entry_packet` and an `events` list (TP/SL/trail/liq/floor/flip alerts). Never changes params.
 
-## v1.0 (2026-10-16): public release
+## v1.0-rc (2026-10-16)
 - Self-contained repo: no references to anything outside it; every path resolves inside the repo root.
 - `bots/perps.py` starts and supervises its sub-bots itself (security_warden, agent_autoagent, code_tuner, owner_commands), each logging to `bot_logs/<name>.console.log`; one Ctrl+C stops everything.
 - Sub-bots scoped to the Perps ecosystem; their SI calls follow `LLM_MAIN` / `LLM_FALLBACK` (off = no SI calls).

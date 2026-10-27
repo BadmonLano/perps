@@ -33,7 +33,7 @@ Before acting on any trade, also read `rules/rules.md` (the owner's rules; they 
 
 ## Leverage, sizes and per-check tuning
 
-SETUP.md section 4. Leverage runs from 10x up to `PERP_MAX_LEVERAGE` (70x default) and sizing is explicit (`collateral_sol`, `collateral_usd` or `size_usd`). On every position check you may move TP, SL, trail and exit floor with `update_params` (perps-boss "Position Modification"); every change is logged to `bot_logs/perps_param_changes.jsonl` and the owner is told. Bot-wide knobs in `bots/tuner/perps_params.json` change only by directive (`json_relay/perp_meeting.json`); review `perps_param_changes.jsonl` weekly with the forensics skill.
+SETUP.md section 4. Leverage runs from 10x up to `PERP_MAX_LEVERAGE` (20x default) and sizing is explicit (`collateral_sol`, `collateral_usd` or `size_usd`). On every position check you may move TP, SL, trail and exit floor with `update_params` (perps-boss "Position Modification"); every change is logged to `bot_logs/perps_param_changes.jsonl` and the owner is told. Bot-wide knobs in `bots/tuner/perps_params.json` change only by directive (`json_relay/perp_meeting.json`); review `perps_param_changes.jsonl` weekly with the forensics skill.
 
 ## Changing skills
 

@@ -3,7 +3,7 @@
 Copy this file to `rules/rules.md` and fill it in with the owner.
 
 The agent reads this file before every trade decision. These rules override skill defaults.
-The bot's hard gates (leverage from 10x up to `PERP_MAX_LEVERAGE`, 70x by default; explicit collateral; live price) still apply.
+The bot's hard gates (leverage from 10x up to `PERP_MAX_LEVERAGE`, 20x by default; explicit collateral; live price) still apply.
 Leave a section empty if it does not apply.
 
 ## Max size
@@ -11,7 +11,7 @@ Leave a section empty if it does not apply.
 
 
 ## Max leverage
-<!-- Your own cap between 10x and PERP_MAX_LEVERAGE (70x default), e.g. 25x -->
+<!-- Your own cap between 10x and PERP_MAX_LEVERAGE (20x default), e.g. 15x -->
 
 
 ## No-trade hours
