@@ -279,7 +279,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.
 
 ## Versions and releases
 
-- Versions look like `v1.0.3`. Each one is a **Release** with notes on what changed (history in [`CHANGELOG.md`](CHANGELOG.md) and [`TIMELINE.md`](TIMELINE.md)).
+- Versions look like `v1.0.4`. Each one is a **Release** with notes on what changed (history in [`CHANGELOG.md`](CHANGELOG.md) and [`TIMELINE.md`](TIMELINE.md)).
 - **Forks and downloads don't auto-update.** ZIP: download the new release and copy your `bots/.env`, `rules/` and `learnings/` across. Git clone: `git pull`. Fork: click **Sync fork**.
 - To hear about new versions: **Watch → Custom → Releases**.
 

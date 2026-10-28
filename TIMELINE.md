@@ -2,6 +2,9 @@
 
 Version history, newest first.
 
+## v1.0.4 (2026-10-28)
+- Safety rule `rules/perps-safety.mdc` for cursor.directory. Docs only.
+
 ## v1.0.3 (2026-10-27)
 - Profit units: TP/SL price % plus margin % everywhere, trail scaled by leverage and run on after-fee P/L, SL-near-liquidation warning at open, numbers-first open guidance in perps-boss.
 

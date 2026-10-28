@@ -102,7 +102,7 @@ if __name__ == "__main__":
                "console and sub-bots (Ctrl+C stops everything). Console only: python bots/perps_ui.py. "
                "Docs: README.md and SETUP.md.")
     _parser.add_argument("--setup", action="store_true", help="run the setup wizard, write bots/.env and exit")
-    _parser.add_argument("--version", action="version", version="Perps v1.0.3")
+    _parser.add_argument("--version", action="version", version="Perps v1.0.4")
     _parser.parse_known_args()
 
 # ── First-run setup wizard (bots/perps_setup.py) ─────────────────────────────

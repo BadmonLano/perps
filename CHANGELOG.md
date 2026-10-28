@@ -2,6 +2,9 @@
 
 Full history: [TIMELINE.md](TIMELINE.md).
 
+## v1.0.4 (2026-10-28): cursor.directory safety rule
+- `rules/perps-safety.mdc: cursor.directory Rule component (paper default, no secrets, respect caps, confirm live orders). Docs/packaging only; no trading code or defaults changed.`
+
 ## v1.0.3 (2026-10-27): profit % across leverage, numbers-first opens
 - TP/SL shown as price % and margin % in fill alerts, acks and the dashboard.
 - Trail arm/giveback scale with leverage from the 5x values (`PERP_TRAIL_LEV_SCALE=sqrt`, `PERP_TRAIL_REF_LEVERAGE=5`), tiers too; giveback capped at 50.
