@@ -1,6 +1,6 @@
 <p align="center"><img src="assets/perps_logo.png" alt="Perps" width="320"></p>
 
-# Perps v1.0
+# Perps
 
 *Long it, short it, let the agent manage it.*
 
@@ -17,6 +17,30 @@ Perps is a Solana perpetuals trading system for Jupiter Perps (SOL, BTC, ETH) th
 > - **Use a burner hot wallet** that holds only what you can afford to lose completely. Never use your main wallet or a wallet with other assets.
 > - **The gates reduce risk; they do not remove it.** Bugs, RPC failures, stale feeds and bad model output can lose money.
 > - **Not financial advice.** This is experimental software provided as-is under the MIT license, with no warranty. You are responsible for every transaction it sends.
+
+## Works with
+
+Perps can be run by Grok Bot, Muse, or an agent from any of the larger SI companies: any SI agent that can read and write files and run Python works. No official partnership or endorsement is implied.
+
+## Contents
+
+- [Works with](#works-with)
+- [Glossary](#glossary)
+- [Features](#features)
+- [Paper quick start (no wallet, no keys)](#paper-quick-start-no-wallet-no-keys)
+- [Signals (what the agent writes)](#signals-what-the-agent-writes)
+- [Stop and take-profit protection](#stop-and-take-profit-protection)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Install as plugin](#install-as-plugin)
+- [Windows, Mac and Linux](#windows-mac-and-linux)
+- [Agent setup (required)](#agent-setup-required)
+- [How it fits together](#how-it-fits-together)
+- [Tests](#tests)
+- [Contributing](#contributing)
+- [Versions and releases](#versions-and-releases)
+- [Updating](#updating)
+- [License](#license)
 
 ## Glossary
 
@@ -160,6 +184,28 @@ On the first start the **setup wizard** asks for the wallet key, RPC and the res
 
 Full walkthrough: **[SETUP.md](SETUP.md)**. Skills and how an agent should load them: **[skills/README.md](skills/README.md)**.
 
+## Install as plugin
+
+Perps ships as a plugin: 9 agent skills (perps-boss, pnl-tracker, forensics and the sub-skills) plus this repo's bots. The manifest is in `.cursor-plugin/plugin.json` (Cursor) and `.grok-plugin/plugin.json` (Grok Bot); both list the same skills.
+
+- **Cursor:** once listed, open **Customize** in the sidebar, find **perps**, then **Install**. To try it before then, clone this repo into `~/.cursor/plugins/local/perps`, run **Developer: Reload Window**, and check under **Customize** that the skills show up.
+- **Grok Bot or any other SI agent:** clone the repo and point your agent at `SETUP.md`. It loads the skills from `skills/` and sets up the loops in `automations/`.
+
+The skills tell your agent how to run the bot. The bot itself still runs on your machine: follow [Quick start](#quick-start), stay in paper mode (`PERPS_DRY_RUN=true`) until the acks look right, then go live with the smallest collateral you're OK losing.
+
+## Windows, Mac and Linux
+
+The same Python files run on all three. Tests and the console smoke check pass on Windows 10/11 and Linux; macOS should work but is less tested.
+
+| Thing | Windows | Mac / Linux |
+|---|---|---|
+| Python command | `python` | usually `python3` (inside a venv, `python`) |
+| Paths in docs | `bots\.env` | `bots/.env` |
+| Terminal | Windows Terminal recommended | Terminal / iTerm |
+| File locks | `msvcrt` | `fcntl` (picked automatically) |
+
+Windows-only bits in the code are guarded so they're skipped elsewhere: `bots/perps_ui.py` uses `msvcrt` for single-key input and `ctypes.windll` for the console (typed input on Mac/Linux), and `bots/sub-bots/agent_ack.py` picks `msvcrt` or `fcntl` locks. Keep the computer awake: trading pauses when it sleeps (Mac: `caffeinate -i python3 bots/perps.py`).
+
 ## Agent setup (required)
 
 The bot never decides anything on its own: it writes packets to `inbox/` and waits. **The agent MUST create recurring jobs (cron, scheduled routine, heartbeat) from `automations/`**: `perps_lane` (the main loop: drains packets, sends signals, tunes TP/SL) plus `warden_lane`, `misc_lane`, `morning_brief` and the nightly self-eval. Schedules, how often to drain and an example staggered crontab: [SETUP.md section 11](SETUP.md#11-build-your-automations).
@@ -224,3 +270,25 @@ None of these touch the wallet; all run offline.
 - [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [TIMELINE.md](TIMELINE.md)
 - License: [MIT](LICENSE)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md), not public issues.
+
+## Versions and releases
+
+- Versions look like `v1.0.2`. Each one is a **Release** with notes on what changed (history in [`CHANGELOG.md`](CHANGELOG.md) and [`TIMELINE.md`](TIMELINE.md)).
+- **Forks and downloads don't auto-update.** ZIP: download the new release and copy your `bots/.env`, `rules/` and `learnings/` across. Git clone: `git pull`. Fork: click **Sync fork**.
+- To hear about new versions: **Watch → Custom → Releases**.
+
+## Updating
+
+- Git: `git pull` in the folder. ZIP: unzip the new release over the old folder or next to it.
+- Your `bots/.env` and `bot_logs/` are kept either way (git ignores them). Check `bots/.env.example` and the release notes for new settings.
+
+## License
+
+[MIT](LICENSE) © 2026 Bentayga Empire LLC. Use it, change it, share it; keep the license notice. No warranty.
+
+---
+
+More from Bentayga: [JOS (@JOSYSTEMS)](https://x.com/JOSYSTEMS) · [theflowcycle.com](https://theflowcycle.com)

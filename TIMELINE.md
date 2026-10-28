@@ -2,6 +2,9 @@
 
 Version history, newest first.
 
+## v1.0.2 (2026-10-27)
+- Repo parity with Meme Sniper: plugin manifests, CHANGELOG.md, social preview, README sections (Works with, Contents, Install as plugin, Windows/Mac/Linux, Versions, Updating, License). Docs only.
+
 ## v1.0.1 (2026-10-27)
 - README: paper mode is the stated default (live only with `PERPS_DRY_RUN=false`), a paper quick start with no wallet, a glossary, example signals and `send_signal.py` usage, the real clone URL, Linux noted as working. Cron detail moved to SETUP.md section 11.
 - `python bots/perps.py --help` / `--version` print and exit without starting the engine.

@@ -1,0 +1,31 @@
+{
+  "name": "perps",
+  "version": "1.0.2",
+  "description": "Open-source Jupiter Perps (SOL/BTC/ETH) bot run by your SI agent. Paper mode by default, leverage cap, stop and take-profit protection, oracle halt and open/add guards, with inbox packets so Grok Bot, Muse or any SI agent can read and act within your rules.",
+  "author": {
+    "name": "Bentayga Empire LLC",
+    "url": "https://github.com/BadmonLano"
+  },
+  "homepage": "https://github.com/BadmonLano/perps",
+  "repository": "https://github.com/BadmonLano/perps",
+  "license": "MIT",
+  "keywords": [
+    "perps",
+    "jupiter perps",
+    "solana perps bot",
+    "perpetuals trading bot",
+    "paper trading"
+  ],
+  "logo": "assets/perps_logo.png",
+  "skills": [
+    "skills/perps-boss",
+    "skills/pnl-tracker",
+    "skills/forensics",
+    "skills/sub-skills/autoagent",
+    "skills/sub-skills/code-monitor",
+    "skills/sub-skills/learnings-summarizer",
+    "skills/sub-skills/morning-brief",
+    "skills/sub-skills/owner-ping",
+    "skills/sub-skills/warden"
+  ]
+}
