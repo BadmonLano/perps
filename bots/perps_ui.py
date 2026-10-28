@@ -221,6 +221,9 @@ ENV_ROWS = [  # (key, label) shown in Settings > Env; perps engine keys only
     ("PERP_MAX_LEVERAGE", "Max Leverage Cap (X)"), ("PERP_LEV_LADDER", "Leverage Ladder (SOL:X, Less Collateral = More Leverage)"),
     ("PERP_ONE_PER_MARKET", "One Position Per Market (true/false)"),
     ("PERP_LIQ_WARN_PCT", "Liq Warning Distance (%)"), ("PERP_SL_WARN_PCT", "SL Warning Distance (%)"),
+    ("PERP_TRAIL_ACTIVATE", "Trail Arm (% Of Margin, Net, At 5x)"), ("PERP_TRAIL_DROP", "Trail Giveback (Margin Pts At 5x)"),
+    ("PERP_TRAIL_LEV_SCALE", "Trail Leverage Scaling (sqrt/linear/off)"), ("PERP_TRAIL_REF_LEVERAGE", "Trail Reference Leverage (x)"),
+    ("PERP_SL_LIQ_WARN_FRAC", "SL Near Liq Warning (Fraction Entry->Liq, 0 = Off)"),
     ("OWNER_POS_ENABLED", "Owner Positions Enabled"), ("OWNER_POS_TIMEOUT_MIN", "Owner Position Timeout (Min)"),
     ("OWNER_POS_LIQ_EARLY_FRAC", "Owner Liq Step-In Fraction"), ("OWNER_POS_SCAN_S", "Owner Scan Interval (S)"),
     ("OWNER_COMMANDS", "Owner Commands Mode"), ("OWNER_COMMANDS_TG_TOKEN", "Owner Commands Bot Token"),
@@ -494,6 +497,17 @@ def menu_panel():
                  border_style=GREEN, style=f"on {BG}", box=box.ROUNDED)
 
 
+def _lvl_txt(p, key):
+    """TP/SL cell: price plus the price move and the margin % it means (v1.0.3)."""
+    try:
+        lv, e = float(p.get(key)), float(p.get("entry_price"))
+        lev = float(p.get("leverage") or 1)
+        mv = (lv - e) / e * 100 if str(p.get("direction")).lower() == "long" else (e - lv) / e * 100
+        return f"{_num(lv, 4)} ({mv:+.1f}% px, {mv * lev:+.0f}% mgn)"
+    except Exception:
+        return _num(p.get(key), 4)
+
+
 def dashboard_view():
     box, Align, Group, Panel, Table, Text = _rich()
     hb = engine_hb()
@@ -518,7 +532,7 @@ def dashboard_view():
         rs = "red" if (room is not None and room < 5) else ("yellow" if (room is not None and room < 10) else GREEN)
         pt.add_row(str(p.get("market") or mk), str(p.get("direction", "-")).title(), _num(p.get("entry_price"), 4),
                    _num(p.get("size_usd"), 2, "$"), _num(_collat(p), 2, "$"), _num(p.get("leverage"), 1, suf="x"), _num(p.get("liq_price"), 4),
-                   Text(_num(room, 2, suf="%"), style=rs), _num(p.get("sl_price"), 4), _num(p.get("tp_price"), 4),
+                   Text(_num(room, 2, suf="%"), style=rs), _lvl_txt(p, "sl_price"), _lvl_txt(p, "tp_price"),
                    _age_txt(time.time() - _epoch(p.get("timestamp"))))
     if not pos:
         pt.add_row("None", *[""] * 10)

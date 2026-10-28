@@ -25,10 +25,24 @@ collateral, closes sweep the proceeds back to SOL.
 - **Liquidation price**: roughly `entry x (1 - 1/leverage)` for a long and
   `entry x (1 + 1/leverage)` for a short (`calc_liq_price`). Fees eaten from
   collateral move it closer; `calc_liq_from_account` uses the live account.
-- **PnL %** is reported on collateral, net of fees.
+- **PnL % (ROE)** = % of collateral, after fees. Before fees it is roughly price move % x leverage. At 50x, a 1% price move is about 50% of collateral, and about a 2% move against you is liquidation.
+- **sl_pct / tp_pct are PRICE moves from entry, not PnL %.** `sl_pct: 1` at 50x is about a 50% collateral loss.
+- **trail_activate_pct / trail_drop_pct are % of collateral (leveraged PnL, net of fees)**, not price %. At 50x, a trail arm of 20 would be a 0.4% price move, which is why the bot scales the default trail with leverage (see Position Modification).
+- Fill alerts, acks and the dashboard show both: `TP $182.50 (+2.0% price, +40% margin at 20x)`.
 
-Example: "0.25 SOL at 50x long" = 0.25 SOL collateral, 50x leverage, notional
-of 12.5 SOL. A 2% move against you is near liquidation.
+| Same TP 2% / SL 1% (price) | 5x | 20x | 50x |
+|---|---|---|---|
+| TP in margin | +10% | +40% | +100% |
+| SL in margin | -10% | -20% | -50% |
+| Room to liquidation (price) | ~20% | ~5% | ~2% |
+
+Example: "0.5 SOL at 20x long" = 0.5 SOL collateral, 20x leverage, notional
+of 10 SOL. A 5% move against you is near liquidation. (Above 20x the owner must raise
+`PERP_MAX_LEVERAGE` first; a 50x signal is declined at the default cap.)
+
+**Stop vs liquidation.** Keep the SL well inside the entry-to-liquidation distance. At open the
+bot warns (never blocks) when the SL sits past 60% of that distance (`PERP_SL_LIQ_WARN_FRAC`),
+because fees and borrow move liquidation closer while you hold.
 
 ### Leverage Ladder (less collateral, more leverage)
 The smaller the stake, the higher the leverage; it drops as collateral rises, and it never
@@ -54,8 +68,8 @@ One signal per file, one file per chain: `json_relay/perp_sol_signal.json`,
 `perp_btc_signal.json`, `perp_eth_signal.json` (the legacy `perp_signal.json` also works;
 the market then comes from the payload).
 ```json
-{"action": "long", "market": "SOL-PERP", "perps_is_order": true, "collateral_sol": 0.25,
- "leverage": 50, "tp_pct": 4, "sl_pct": 1.5, "reason": "one line why"}
+{"action": "long", "market": "SOL-PERP", "perps_is_order": true, "collateral_sol": 0.5,
+ "leverage": 20, "tp_pct": 2, "sl_pct": 1, "reason": "one line why"}
 ```
 - `perps_is_order: true` is **required on every open** (`long` / `short` / `add`). Without it
   the signal is acknowledged and nothing is sent. Closes, adjusts and `update_params` do not need it.
@@ -65,7 +79,7 @@ the market then comes from the payload).
   Bare `size` with `leverage` is read as SOL collateral. Old `collateral`/`amount`
   under 5 is read as SOL, otherwise USD. Be explicit to avoid guessing.
 - Exits: `tp_price`/`sl_price` (prices) or `tp_pct`/`sl_pct` (percent of PRICE move from
-  entry, side-aware). A level on the wrong side, or more than 50% away, is dropped with a warning.
+  entry, side-aware; at 20x, `tp_pct: 2` = +40% margin, `sl_pct: 1` = -20% margin). A level on the wrong side, or more than 50% away, is dropped with a warning.
 - Always include `reason`. It is logged and used in autopsies.
 - **Limit entries:** `action: "limit_long"` / `"limit_short"` with `limit_price` (plus the normal size, TP/SL and `perps_is_order: true`). Within 1% of the target it opens at market now. Otherwise it is parked in `bot_logs/perp_limit_order.json` (ack `status: parked`); the bot checks that market's mark price every ~30s and, when price reaches the target, sends it as a normal market open through every gate (ack with `signal_file: perp_limit_order.json` + Telegram). One parked entry at a time: a new one replaces the old. It expires after `expires_in_min` (or `expires_at`), default 24h (`PERP_LIMIT_TTL_HOURS`), ack `expired`. To cancel, delete `bot_logs/perp_limit_order.json`. `tp_pct`/`sl_pct` are priced at the fill; absolute `tp_price`/`sl_price` must still make sense at the target. If `NEW_POSITIONS_ENABLED` is off when it triggers, it is declined (`new_positions_off`) and consumed.
 
@@ -90,6 +104,15 @@ The house exit floor always sits beyond your SL (between SL and liquidation); it
 4. Fire, adjust, close, tune open positions with `update_params`, or do nothing. Doing nothing is a valid call; say why.
 5. Notify the owner through the owner-ping skill when you open, close, or decline.
 
+### Deciding Whether To Open (outside resources, numbers first)
+When you reason about whether to open a position, you may use outside resources to finalize the
+decision: exchange and venue pages, on-chain dashboards, funding and open-interest trackers,
+liquidation heatmaps, order-book and flow data, and news. It is highly recommended to lean on the
+raw numbers (price and structure, funding, open interest, volume, liquidation levels, flows) and
+what they imply, over headlines or narrative. A headline is a reason to check the numbers, not a
+reason to trade. Name the numbers you used in `reason`, note each outside source and its age, and
+never let an outside page override the hard gates, the owner's rules or the leverage cap.
+
 ## Position Modification
 Run on every position check (the perps lane does it after draining packets). Each chain
 packet with an open position carries `position_management.params` (the live TP, SL, trail
@@ -102,7 +125,10 @@ and exit floor, plus `params_source`) and `tune_with` (the action and the updata
    owner sees "Params updated". Updatable:
    - `tp_price` or `tp_pct` / `take_profit_pct` (percent of price from entry, side-aware)
    - `sl_price` or `sl_pct` / `stop_loss_pct` (must stay on the safe side of liquidation)
-   - `trail_activate_pct`, `trail_drop_pct` (percent of PnL, same units as TRAIL_ACTIVATE_PCT / TRAIL_DROP_PCT; drop clamped 3-50%)
+   - `trail_activate_pct`, `trail_drop_pct` (percent of collateral, net of fees, same units as TRAIL_ACTIVATE_PCT / TRAIL_DROP_PCT; drop clamped 3-50%).
+     The defaults (20 / 15) are the values at 5x and scale with leverage (`PERP_TRAIL_LEV_SCALE`, default `sqrt`):
+     5x arms at +20% / gives back 15 (4% / 3% price), 20x at +40% / 30 (2% / 1.5% price), 50x at +63% / 47 (1.3% / 0.95% price).
+     A value you set here is used as given, not scaled.
    - `exit_floor` / `exit_floor_price` (clamped against liquidation, entry and TP)
    Size, leverage, collateral and direction are refused here (use `add` / `adjust`).
    A TP on the wrong side of entry or an SL past liquidation rejects the whole update.
@@ -113,7 +139,7 @@ and exit floor, plus `params_source`) and `tune_with` (the action and the updata
 **Manual way:**
 ```json
 {"action": "update_params", "market": "SOL-PERP",
- "params": {"tp_pct": 6, "sl_pct": 1.2, "trail_activate_pct": 3, "trail_drop_pct": 4},
+ "params": {"tp_pct": 6, "sl_pct": 1.2, "trail_activate_pct": 30, "trail_drop_pct": 12},
  "reason": "funding flipped, tighten the stop and let the trail take it"}
 ```
 

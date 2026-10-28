@@ -98,7 +98,7 @@ Run at least one full trade with your SI in paper mode. To go live, set `PERPS_D
 
 ## Signals (what the agent writes)
 
-The agent answers a packet with one small JSON file, `json_relay/perp_<chain>_signal.json`. The bot gates it, then fills it or declines it with a reason in `bot_logs/perp_signal_acks/acks.jsonl`. Three examples (also in [`bots/examples/`](bots/examples/)):
+The agent answers a packet with one small JSON file, `json_relay/perp_<chain>_signal.json`. The bot gates it, then fills it or declines it with a reason in `bot_logs/perp_signal_acks/acks.jsonl`. Three examples (also in [`bots/examples/`](bots/examples/)). `tp_pct` and `sl_pct` are **% of price move from entry**, not % of your margin: at the 20x default cap, `tp_pct: 2.0` is about +40% on margin and `sl_pct: 1.0` about -20%.
 
 ```json
 {"action": "long", "market": "SOL-PERP", "reason": "SOL holding the 4h higher low", "perps_is_order": true, "collateral_usd": 11.0, "tp_pct": 2.0, "sl_pct": 1.0}
@@ -124,6 +124,9 @@ Jupiter Perps has no on-chain stop or take-profit this bot can arm without an AP
 - When price crosses a stop, take-profit, trail or exit floor, the bot alerts you and writes a packet to the agent's `inbox/`. The agent calls the shots within your rules and sends the close; the bot never closes on its own.
 - On each position update the agent may move the stop, take-profit, trail and exit floor. It never changes size or leverage.
 - Liquidation watch warns before liquidation (`PERP_LIQ_WARN_PCT`, `PERP_SL_WARN_PCT`).
+- Units: TP and SL are % of price; P/L and the trail are % of margin (collateral) after fees and borrow. Alerts, acks and the dashboard show both, e.g. `TP: $182.50 (+2.0% price, +40% margin at 20x)`.
+- The trail alert (default arm 20 / giveback 15 margin points, the values at 5x) scales with leverage (`PERP_TRAIL_LEV_SCALE=sqrt`): 20x arms at +40 / 30, 50x at +63 / 47, so it is not set off by a 0.3% wiggle at high leverage. `linear` keeps the same price move at every leverage; `off` keeps 20 / 15 fixed.
+- At open the bot warns (never blocks) when the SL sits past 60% of the way from entry to liquidation (`PERP_SL_LIQ_WARN_FRAC`).
 - Opens and adds are refused while the monitor is not ticking (`PERP_OPEN_REQUIRE_MONITOR`, `PERP_MONITOR_STALE_S`), so a position is never opened unwatched.
 - An add is refused if its estimated liquidation would sit within `PERP_ADD_MIN_SL_LIQ_GAP_PCT` (3%) of the stop.
 - **Oracle halt:** prices and accounts come live from Jupiter's Pool and Custody accounts. If that read fails, new orders are refused and you get an alert (and a `trading_halted` packet); the bot never falls back to the old hardcoded oracle map. Existing positions stay watched, and trading resumes when the read recovers.
@@ -276,7 +279,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.
 
 ## Versions and releases
 
-- Versions look like `v1.0.2`. Each one is a **Release** with notes on what changed (history in [`CHANGELOG.md`](CHANGELOG.md) and [`TIMELINE.md`](TIMELINE.md)).
+- Versions look like `v1.0.3`. Each one is a **Release** with notes on what changed (history in [`CHANGELOG.md`](CHANGELOG.md) and [`TIMELINE.md`](TIMELINE.md)).
 - **Forks and downloads don't auto-update.** ZIP: download the new release and copy your `bots/.env`, `rules/` and `learnings/` across. Git clone: `git pull`. Fork: click **Sync fork**.
 - To hear about new versions: **Watch → Custom → Releases**.
 

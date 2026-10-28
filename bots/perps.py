@@ -45,6 +45,7 @@ Drift resting-order controls). NONE of it is live: Drift was torn out in Sprint
 stopped being true and kept re-teaching a dead model to anyone reading the top
 of this file. History is in git; doctrine lives here, and doctrine must be true.
 """
+import math
 import os, json, traceback, asyncio, httpx, re, struct, hashlib, secrets
 
 def _envv(key, default=None):
@@ -101,7 +102,7 @@ if __name__ == "__main__":
                "console and sub-bots (Ctrl+C stops everything). Console only: python bots/perps_ui.py. "
                "Docs: README.md and SETUP.md.")
     _parser.add_argument("--setup", action="store_true", help="run the setup wizard, write bots/.env and exit")
-    _parser.add_argument("--version", action="version", version="Perps v1.0.2")
+    _parser.add_argument("--version", action="version", version="Perps v1.0.3")
     _parser.parse_known_args()
 
 # ── First-run setup wizard (bots/perps_setup.py) ─────────────────────────────
@@ -506,6 +507,100 @@ def _perp_sl_liq_gap_pct(direction, sl, liq):
     if not (sl and liq):
         return None
     return ((sl - liq) / sl * 100.0) if direction == "long" else ((liq - sl) / sl * 100.0)
+
+
+# v1.0.3: the trail is measured in % of collateral (margin/ROE), so a fixed 20/15
+# is a 4%/3% price move at 5x but 0.4%/0.3% at 50x (noise). Scale both by leverage
+# relative to PERP_TRAIL_REF_LEVERAGE (5x keeps the base values exactly).
+#   PERP_TRAIL_LEV_SCALE: sqrt (default) | linear (same price move at every leverage) | off
+# Factor never drops below 1 (low leverage keeps the base values); giveback capped at 50.
+PERP_TRAIL_REF_LEVERAGE = _env_float("PERP_TRAIL_REF_LEVERAGE", "TRAIL_REF_LEVERAGE", 5.0)
+PERP_TRAIL_LEV_SCALE    = str(os.environ.get("PERP_TRAIL_LEV_SCALE", "sqrt") or "sqrt").strip().lower()
+PERP_TRAIL_DROP_MAX     = 50.0
+# v1.0.3: warn at open when the SL sits past this fraction of the entry->liq distance (0 = off). Warn only.
+PERP_SL_LIQ_WARN_FRAC   = _env_float("PERP_SL_LIQ_WARN_FRAC", "SL_LIQ_WARN_FRAC", 0.6)
+
+
+def trail_lev_factor(leverage, mode=None, ref=None):
+    """Multiplier for margin-% trail levels at this leverage (>= 1)."""
+    try:
+        m = (mode or PERP_TRAIL_LEV_SCALE or "sqrt").lower()
+        r = float(ref if ref is not None else PERP_TRAIL_REF_LEVERAGE) or 5.0
+        lv = float(leverage or 0)
+        if m == "off" or lv <= 0:
+            return 1.0
+        x = lv / r
+        f = x if m == "linear" else math.sqrt(x)
+        return max(1.0, f)
+    except Exception:
+        return 1.0
+
+
+def trail_levels(leverage, peak_pct=0.0, pos=None, base_activate=None, base_drop=None):
+    """(activate_pct, drop_pct) in % of collateral after fees, scaled by leverage.
+    A per-position trail_activate_pct / trail_drop_pct (update_params) is used as given."""
+    pos = pos or {}
+    f = trail_lev_factor(leverage)
+    if pos.get("trail_activate_pct"):
+        act = float(pos["trail_activate_pct"])
+    else:
+        act = float(base_activate if base_activate is not None else TRAIL_ACTIVATE_PCT) * f
+    if pos.get("trail_drop_pct"):
+        drop = float(pos["trail_drop_pct"])
+    else:
+        drop = min(PERP_TRAIL_DROP_MAX, float(base_drop if base_drop is not None else TRAIL_DROP_PCT) * f)
+    try:
+        for _pk, _dr in PERP_TRAIL_TIERS:
+            if float(peak_pct or 0) >= _pk * f:
+                drop = min(drop, min(PERP_TRAIL_DROP_MAX, _dr * f))
+    except Exception:
+        pass
+    return round(act, 2), round(drop, 2)
+
+
+def margin_pct(price_move_pct, leverage):
+    """Price move % -> % of collateral (before fees)."""
+    try:
+        return float(price_move_pct) * float(leverage or 1)
+    except Exception:
+        return None
+
+
+def tp_sl_label(kind, level, entry, direction, leverage):
+    """'TP $182.50 (+2.0% price, +40% margin at 20x)'. kind: 'tp' | 'sl'."""
+    k = kind.upper()
+    try:
+        if not level:
+            return f"{k}: none"
+        lv, e = float(level), float(entry)
+        mv = (lv - e) / e * 100 if direction == "long" else (e - lv) / e * 100
+        mg = margin_pct(mv, leverage)
+        return f"{k}: ${lv:,.2f} ({mv:+.1f}% price, {mg:+.0f}% margin at {float(leverage):g}x)"
+    except Exception:
+        return f"{k}: ${level}"
+
+
+def tp_sl_pcts(level, entry, direction, leverage):
+    """(price_move_pct, margin_pct) for a TP/SL level, or (None, None)."""
+    try:
+        lv, e = float(level), float(entry)
+        mv = (lv - e) / e * 100 if direction == "long" else (e - lv) / e * 100
+        return round(mv, 3), round(mv * float(leverage or 1), 2)
+    except Exception:
+        return None, None
+
+
+def sl_liq_fraction(entry, sl, liq, direction):
+    """How far the SL sits along entry->liq (0 = at entry, 1 = at liq). None if unknown."""
+    try:
+        e, s_, l = float(entry), float(sl), float(liq)
+        span = (e - l) if direction == "long" else (l - e)
+        dist = (e - s_) if direction == "long" else (s_ - e)
+        if span <= 0:
+            return None
+        return dist / span
+    except Exception:
+        return None
 
 
 def effective_trail_drop(peak_pct, base_drop=None, pos=None):
@@ -9029,13 +9124,23 @@ async def process_signal(data: dict):
                 # Sprint 39: persist venue for close-side routing later
                 save_position({"direction": action, "entry_price": entry_mark, "size_usd": size_usd, "leverage": leverage, "collateral": collateral_usd, "base_amount": base_amount, "tp_price": tp_price, "sl_price": sl_price, "breakeven": breakeven, "liq_price": liq_price, "liq_price_source": _liq_src0, "liq_exit_floor": liq_exit_floor, "timestamp": datetime.now(EST).isoformat(), "tx_sig": tx_sig, "reason": reason, "venue": venue_used, "market": market_str, "phase": (load_daily_read() or {}).get("current_phase"), "micro_lean": _micro_lean_flag, "entry_fingerprint": build_entry_fingerprint(market_str.split("-")[0], action, leverage), "entry_decision_context": build_entry_decision_context(gate_audit, data, reason), "entry_packet": _perp_entry_packet_ref(market_str), "events": []})
                 emoji  = "📈" if action == "long" else "📉"
-                tp_str = f"TP: ${float(tp_price):.2f}" if tp_price else "TP: none"
-                sl_str = f"SL: ${float(sl_price):.2f}" if sl_price else "SL: none"
+                tp_str = tp_sl_label("tp", tp_price, entry_mark, action, leverage)
+                sl_str = tp_sl_label("sl", sl_price, entry_mark, action, leverage)
+                _tpp, _tpm = tp_sl_pcts(tp_price, entry_mark, action, leverage) if tp_price else (None, None)
+                _slp, _slm = tp_sl_pcts(sl_price, entry_mark, action, leverage) if sl_price else (None, None)
+                _sl_frac = sl_liq_fraction(entry_mark, sl_price, liq_price, action) if (sl_price and liq_price) else None
+                _sl_liq_warn = None
+                if _sl_frac is not None and PERP_SL_LIQ_WARN_FRAC > 0 and _sl_frac > PERP_SL_LIQ_WARN_FRAC:
+                    _sl_liq_warn = (f"SL sits {_sl_frac*100:.0f}% of the way from entry to liquidation "
+                                    f"(warn above {PERP_SL_LIQ_WARN_FRAC*100:.0f}%). Fees and borrow move liq closer. Warning only.")
                 fees   = size_usd * (JUPITER_TRADE_FEE_PCT / 100)
                 log(f"open {action}", action, size_usd, entry_mark, reason, tx_sig)
                 _perp_set_outcome("filled", tx=tx_sig, market=market_str, side=action, entry=entry_mark,
                                   size_usd=size_usd, collateral_usd=collateral_usd, leverage=leverage,
                                   liq=liq_price, tp=tp_price, sl=sl_price, exit_floor=liq_exit_floor,
+                                  tp_price_pct=_tpp, tp_margin_pct=_tpm, sl_price_pct=_slp, sl_margin_pct=_slm,
+                                  sl_liq_fraction=(round(_sl_frac, 3) if _sl_frac is not None else None),
+                                  warning=_sl_liq_warn,
                                   collateral_requested_usd=_req_col_pp, collateral_source=_col_src,
                                   funding=(_LAST_JUP_FILL or {}).get("funding"))
                 venue_tag = "Jupiter"  # Sprint 57: only venue
@@ -9062,7 +9167,9 @@ async def process_signal(data: dict):
                 except Exception as _oe:
                     print(f"[perp] open-alert fold err: {_oe}")
                 _fund_block = f"\nAuto-funded:\n{_fund_note}" if _fund_note else ""
-                await notify(f"{emoji} <b>{market_str} {action.upper()} — {venue_tag}</b>\nSize: ${size_usd:.2f} | {leverage}x\nCollateral: ${collateral_usd:.2f}\nEntry: ${entry_mark:,.2f}\nBreakeven: ${breakeven:.2f} | Liq: ${liq_price:.2f}\n{tp_str} | {sl_str}\nFees (round trip): ${fees:.3f}{_fund_block}{_open_extra}\nReason: {reason}\ntx: {tx_sig[:20]}...")
+                if _sl_liq_warn:
+                    _open_extra += f"\n⚠️ {_sl_liq_warn}"
+                await notify(f"{emoji} <b>{market_str} {action.upper()} — {venue_tag}</b>\nSize: ${size_usd:.2f} | {leverage}x\nCollateral: ${collateral_usd:.2f}\nEntry: ${entry_mark:,.2f}\nBreakeven: ${breakeven:.2f} | Liq: ${liq_price:.2f}\n{tp_str}\n{sl_str}\nFees (round trip): ${fees:.3f}{_fund_block}{_open_extra}\nReason: {reason}\ntx: {tx_sig[:20]}...")
                 return
             # ── 429-aware retry backoff ────────────────────────────────────────
             # fetch_market_lookup_table_accounts inside driftpy hammers Helius
@@ -9318,6 +9425,10 @@ async def monitor_position():
                     _hold_h = 0.0
                 net_pnl_usd, fees_usd = calc_net_pnl(gross_pnl_usd, size_usd, _hold_h)
                 pnl_usd = net_pnl_usd  # the alert strings below read pnl_usd
+                # v1.0.3: the trail runs on NET % of collateral (after fees + borrow).
+                _col_m = float(existing.get("collateral") or existing.get("collateral_usd") or 0) or (
+                    (float(size_usd) / leverage) if leverage else float(size_usd or 0))
+                net_lev_pct = (net_pnl_usd / _col_m * 100) if _col_m else leveraged_pct
 
                 # hold time
                 hold_str = ""
@@ -9354,7 +9465,7 @@ async def monitor_position():
                 if (_now_mono - _last_log) >= PERP_MONITOR_LOG_INTERVAL_S or _trail_changed:
                     _PERP_MONITOR_LAST_LOG[sym] = _now_mono
                     _PERP_MONITOR_LAST_TRAIL[sym] = st.get("trail_active")
-                    print(f"[perp monitor] {sym} {direction.upper()} {leverage}x | entry=${entry:.4f} now=${price:.4f} | {leveraged_pct:+.1f}% net=${net_pnl_usd:+.2f} | peak={st['peak_pct']:+.1f}%{' TRAIL' if st['trail_active'] else ''}{hold_str}")
+                    print(f"[perp monitor] {sym} {direction.upper()} {leverage}x | entry=${entry:.4f} now=${price:.4f} | gross {leveraged_pct:+.1f}% net {net_lev_pct:+.1f}% (${net_pnl_usd:+.2f}) | peak={st['peak_pct']:+.1f}%{' TRAIL' if st['trail_active'] else ''}{hold_str}")
 
                 # ── liq price warning ─────────────────────────────────────────
                 liq_dist_pct = abs(price - liq_price) / price * 100 if price else 999
@@ -9380,24 +9491,25 @@ async def monitor_position():
                     continue
 
                 # ── trailing stop ──────────────────────────────────────────────
-                if leveraged_pct > st["peak_pct"]:
-                    st["peak_pct"] = leveraged_pct
+                if net_lev_pct > st["peak_pct"]:
+                    st["peak_pct"] = net_lev_pct
                     # persist so a restart can't erase it (throttled: only on a
                     # meaningful advance, not every 30s tick of noise)
-                    if leveraged_pct - float(existing.get("peak_pct") or 0.0) >= 0.5:
-                        existing["peak_pct"]   = round(leveraged_pct, 2)
+                    if net_lev_pct - float(existing.get("peak_pct") or 0.0) >= 0.5:
+                        existing["peak_pct"]   = round(net_lev_pct, 2)
+                        existing["peak_pct_basis"] = "net_on_collateral"
                         existing["trail_active"] = bool(st.get("trail_active"))
                         save_position(existing, market=market)
 
-                _t_act = float(existing.get("trail_activate_pct") or TRAIL_ACTIVATE_PCT)
-                _t_drop = effective_trail_drop(st["peak_pct"], pos=existing)
+                _t_act, _t_drop = trail_levels(leverage, st["peak_pct"], pos=existing)
                 if not st["trail_active"] and st["peak_pct"] >= _t_act:
                     st["trail_active"] = True
-                    _perp_pos_event(market, existing, "trail_active", price, leveraged_pct)
+                    _perp_pos_event(market, existing, "trail_active", price, net_lev_pct)
                     await notify(
                         f"🎯 <b>TRAILING STOP ACTIVE — {sym} {direction.upper()} {leverage}x</b>\n"
-                        f"Peak gain: {st['peak_pct']:+.1f}% | Activates at {_t_act:g}%\n"
-                        f"Will fire if drops {_t_drop:g}% from peak"
+                        f"Peak gain (net, % of margin): {st['peak_pct']:+.1f}% | Activates at {_t_act:g}% "
+                        f"(~{_t_act/leverage:.2f}% price at {leverage:g}x)\n"
+                        f"Will fire if drops {_t_drop:g} pts from peak (~{_t_drop/leverage:.2f}% price)"
                     )
                 if st["trail_active"] and _t_drop < float(st.get("trail_drop_seen") or 1e9):
                     if st.get("trail_drop_seen") is not None:
@@ -9418,22 +9530,22 @@ async def monitor_position():
                 # executing them is the agent's own pre-authorization firing, not the bot
                 # deciding an exit. The FLOOR stands: the bot never *decides* — it
                 # executes decisions, live ones (signal files) and standing ones (these).
-                if st["trail_active"] and (st["peak_pct"] - leveraged_pct) >= _t_drop:
+                if st["trail_active"] and (st["peak_pct"] - net_lev_pct) >= _t_drop:
                     # ── OWNER'S DOCTRINE (2026-07-24): trail firing is a LEVEL
                     # ALERT, not an auto-close — the giveback threshold hitting
                     # is a decision request; the agent fires the close in words.
                     _now_t = time.time()
                     if _now_t - (st.get("trail_alerted_at") or 0) > 1800:
                         st["trail_alerted_at"] = _now_t
-                        _perp_pos_event(market, existing, "trail_hit", price, leveraged_pct)
+                        _perp_pos_event(market, existing, "trail_hit", price, net_lev_pct)
                         # 2026-08-08 (patch B, soft_trail_sensor_v1): sensor wording.
                         # The old copy offered "take the exit" first, which reads as a
                         # nudge to close on a soft giveback. Same facts, no lean - the
                         # trail reports, it does not recommend.
                         await notify(
                             f"🔔 <b>TRAILING LEVEL REACHED (SENSOR) - {sym} {direction.upper()}</b>\n"
-                            f"peak {st['peak_pct']:+.1f}% → now {leveraged_pct:+.1f}% "
-                            f"(gave back {st['peak_pct'] - leveraged_pct:.1f}% ≥ trail {_t_drop:g}%)\n"
+                            f"peak {st['peak_pct']:+.1f}% → now {net_lev_pct:+.1f}% net of fees "
+                            f"(gave back {st['peak_pct'] - net_lev_pct:.1f} pts ≥ trail {_t_drop:g})\n"
                             f"<b>POSITION REMAINS OPEN.</b> Soft trail is not a close command. "
                             f"Close only on hard SL, thesis death, regime break, the owner order, or "
                             f"planned TP. Your call."
@@ -9450,7 +9562,7 @@ async def monitor_position():
                     await notify(
                         f"🎯 <b>TP LEVEL REACHED — {sym} {direction.upper()} {leverage}x</b>\n"
                         f"{sym} @ ${price:.4f} | your TP @ ${float(tp_price):.4f}\n"
-                        f"Unrealized: {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
+                        f"Unrealized: {leveraged_pct:+.1f}% gross, {net_lev_pct:+.1f}% net of fees (${pnl_usd:+.2f})\n"
                         f"<b>POSITION REMAINS OPEN.</b> Take it, trail it, or raise the target — "
                         f"your call, in words. (The old 'will close automatically' was a Drift-era "
                         f"ghost; nothing was behind it.)"
@@ -9469,7 +9581,7 @@ async def monitor_position():
                     await notify(
                         f"⚠️ <b>SL WARNING — {sym} {direction.upper()} {leverage}x</b>\n"
                         f"{sym} @ ${price:.4f} | SL @ ${float(sl_price):.4f}\n"
-                        f"Leveraged P&L: {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
+                        f"Leveraged P&L: {leveraged_pct:+.1f}% gross, {net_lev_pct:+.1f}% net of fees (${pnl_usd:+.2f})\n"
                         f"TP/SL monitor should close it soon."
                     )
 
@@ -9539,7 +9651,7 @@ async def monitor_position():
                             f"\u26a0\ufe0f <b>EXIT FLOOR REACHED \u2014 {sym} {direction.upper()} {leverage}x</b>\n"
                             f"{sym} @ ${price:.4f} | our floor ${_floor:.4f} | venue liq ${float(_venue_liq):.4f}\n"
                             f"liq source: {_liq_src}\n" + _room_s +
-                            f"Unrealized: {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
+                            f"Unrealized: {leveraged_pct:+.1f}% gross, {net_lev_pct:+.1f}% net of fees (${pnl_usd:+.2f})\n"
                             f"<b>POSITION REMAINS OPEN \u2014 nothing auto-closes.</b> "
                             f"Deposit collateral (widens liq, lowers lev), cut, or ride with a reason."
                         )
@@ -9604,7 +9716,7 @@ async def monitor_position():
                         await notify(
                             f"🛑 <b>SL LEVEL REACHED — {sym} {direction.upper()} {leverage}x</b>\n"
                             f"{sym} @ ${price:.4f} | your SL @ ${float(sl_price):.4f}\n"
-                            f"Unrealized: {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
+                            f"Unrealized: {leveraged_pct:+.1f}% gross, {net_lev_pct:+.1f}% net of fees (${pnl_usd:+.2f})\n"
                             f"<b>POSITION REMAINS OPEN.</b> Your standing level hit — fire the close "
                             f"(/perpclose or close signal), move the SL, or hold with a reason. "
                             f"Nothing auto-closes except liquidation protection."
@@ -9681,7 +9793,8 @@ async def monitor_position():
                                     "size_usd":  size_usd,
                                     "entry":     entry,
                                     "current":   price,
-                                    "pnl_pct":   round(leveraged_pct, 2),
+                                    "pnl_pct":   round(net_lev_pct, 2),
+                                    "gross_pnl_pct": round(leveraged_pct, 2),
                                     "pnl_usd":   round(pnl_usd, 2),
                                 },
                                 "daily_read_triggers": {
@@ -9858,10 +9971,10 @@ async def telegram_listener(connection: AsyncClient):
                                 leveraged_pct = 0; pnl_usd = 0
                             await notify(
                                 f"🔔 <b>Trailing Stop Config</b>\n"
-                                f"Activates at: +{TRAIL_ACTIVATE_PCT}% leveraged gain\n"
-                                f"Fires if drops: {TRAIL_DROP_PCT}% from peak\n"
-                                f"Current P&L: {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
-                                f"Status: {'ACTIVE' if leveraged_pct >= TRAIL_ACTIVATE_PCT else f'activates at +{TRAIL_ACTIVATE_PCT}%'}"
+                                f"Activates at: +{trail_levels(leverage)[0]:g}% of margin (base {TRAIL_ACTIVATE_PCT:g} at {PERP_TRAIL_REF_LEVERAGE:g}x, scale {PERP_TRAIL_LEV_SCALE}, {leverage:g}x now)\n"
+                                f"Fires if drops: {trail_levels(leverage)[1]:g} pts from peak\n"
+                                f"Current P&L (gross): {leveraged_pct:+.1f}% (${pnl_usd:+.2f})\n"
+                                f"Status: {'ACTIVE' if leveraged_pct >= trail_levels(leverage)[0] else f'activates at +{trail_levels(leverage)[0]:g}%'}"
                             )
 
                     elif text == "/perphelp":
@@ -13470,6 +13583,17 @@ async def evaluate_exit_conditions() -> dict | None:
             pnl_pct = (current_price - entry) / entry * 100 * leverage
         else:
             pnl_pct = (entry - current_price) / entry * 100 * leverage
+        # v1.0.3: compare on the same basis as the monitor's peak (net of fees, % of collateral)
+        try:
+            _hh = 0.0
+            if opened_at:
+                _hh = max(0.0, (datetime.now(EST) - datetime.fromisoformat(opened_at)).total_seconds() / 3600.0)
+            _col_x = _s27_float(pos.get("collateral") or pos.get("collateral_usd")) or ((size_usd / leverage) if (size_usd and leverage) else 0)
+            if size_usd and _col_x:
+                _net_x, _ = calc_net_pnl(size_usd * (pnl_pct / leverage / 100), size_usd, _hh)
+                pnl_pct = _net_x / _col_x * 100
+        except Exception:
+            pass
 
         triggers_fired = []
         suggested_action = None
@@ -13485,8 +13609,10 @@ async def evaluate_exit_conditions() -> dict | None:
         # Soft trail is a sensor. It reports that green was handed back; it does
         # not know whether the thesis died. Close levers stay: hard SL, thesis
         # death, regime break / invalidation, an owner order, or a planned TP.
-        trail_activate = float(pos.get("trail_activate_pct") or _perp_get_override("TRAIL_ACTIVATE_PCT", TRAIL_ACTIVATE_PCT))
-        trail_drop     = effective_trail_drop(peak_pnl_pct, float(_perp_get_override("TRAIL_DROP_PCT", TRAIL_DROP_PCT)), pos=pos)
+        trail_activate, trail_drop = trail_levels(
+            leverage, peak_pnl_pct, pos=pos,
+            base_activate=float(_perp_get_override("TRAIL_ACTIVATE_PCT", TRAIL_ACTIVATE_PCT)),
+            base_drop=float(_perp_get_override("TRAIL_DROP_PCT", TRAIL_DROP_PCT)))
         trail_active_flag = bool(pos.get("trail_active")) or (peak_pnl_pct >= trail_activate)
         giveback = max(0.0, float(peak_pnl_pct) - float(pnl_pct))
         if trail_active_flag and giveback >= trail_drop:
@@ -14577,12 +14703,12 @@ TUNABLE_PARAMS = {
     "TRAIL_ACTIVATE_PCT": {
         "type": "float", "min": 5.0, "max": 200.0, "default": 20.0,
         "unit": "percent",
-        "description": "Trailing stop activates after PnL reaches this percent. Default 20% (axiom_log_edge_v1, ratified 2026-08-02; was 30).",
+        "description": "Trail arms at this % of collateral (net of fees) at 5x; scaled up with leverage by PERP_TRAIL_LEV_SCALE. Default 20%.",
     },
     "TRAIL_DROP_PCT": {
         "type": "float", "min": 1.0, "max": 50.0, "default": 15.0,
         "unit": "percent",
-        "description": "Trailing stop trigger drop from peak. Default 15%.",
+        "description": "Trail giveback from peak, in % of collateral points at 5x; scaled with leverage (cap 50). Default 15.",
     },
     "AUTO_CLOSE_MIN_HOLD_HOURS": {
         "type": "float", "min": 0.0, "max": 168.0, "default": 4.0,

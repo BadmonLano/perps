@@ -2,6 +2,15 @@
 
 Full history: [TIMELINE.md](TIMELINE.md).
 
+## v1.0.3 (2026-10-27): profit % across leverage, numbers-first opens
+- TP/SL shown as price % and margin % in fill alerts, acks and the dashboard.
+- Trail arm/giveback scale with leverage from the 5x values (`PERP_TRAIL_LEV_SCALE=sqrt`, `PERP_TRAIL_REF_LEVERAGE=5`), tiers too; giveback capped at 50.
+- Trail and its peak run on after-fee P/L; the monitor line shows gross and net.
+- Open warns (never blocks) when the SL sits past 60% of entry-to-liquidation (`PERP_SL_LIQ_WARN_FRAC`).
+- perps-boss SKILL.md: unit lines, 20x-cap example, "Deciding Whether To Open" (raw numbers over narrative). README examples labelled price %.
+- Tests: `test_profit_units.py`; 40/40 pass, `--smoke` passes. Paper default, 20x cap and other defaults unchanged.
+Notes: [docs/RELEASE_NOTES_v1.0.3.md](docs/RELEASE_NOTES_v1.0.3.md).
+
 ## v1.0.2 (2026-10-27): repo parity with Meme Sniper
 Docs and packaging only. No trading logic or defaults changed; paper stays the default.
 - Plugin manifests `.cursor-plugin/plugin.json` and `.grok-plugin/plugin.json` (9 skills).
