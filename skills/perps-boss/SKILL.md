@@ -9,6 +9,10 @@ allowed-tools: [Read, Write, Edit, Bash]
 
 > **About this playbook (v4.4).** The rules for reading perps packets, sizing with leverage and managing open positions. Defaults are tuned for a cautious, newer owner; read SETUP.md section 4 and adjust size, leverage and stops to your owner's experience and risk.
 
+## The owner's mode comes first (`AGENT_MODE`)
+
+Read `AGENT_MODE` in `bots/.env` (asked first in setup). `suggest` (default): before you write any open, add or close signal, show the owner the trade (market, side, collateral, leverage, SL/TP, why) and wait for their OK; then send it. `auto` (owner opt-in): send signals inside the caps and notify. Protection changes on an open position (SL/TP, trail) follow your normal rules in both modes. Never change `AGENT_MODE` yourself.
+
 ## Owner rules come first
 
 Before every trade decision (open, size, add, adjust, close, param change), read the owner's rules: `rules/rules.md`. Owner rules override every default in this skill (max size, max leverage, no-trade hours, loss limits). The bot's hard gates still apply on top. If a rule and a packet conflict, follow the rule and say so in your `reason`.

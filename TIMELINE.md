@@ -2,6 +2,9 @@
 
 Version history, newest first.
 
+## v1.0.5 (2026-10-29): autonomy is the first setup question
+- `AGENT_MODE` (suggest default, auto with warning) asked first in the wizard; perps-boss skill honours it. No trading code changed.
+
 ## v1.0.4 (2026-10-28)
 - Safety rule `rules/perps-safety.mdc` for cursor.directory. Docs only.
 

@@ -59,6 +59,7 @@ BACK_WORDS = ("q", "back", "esc", "b", "\x1b")
 
 # (key, label, secret, default, kind)  kind: text | url | choice | bool | tuner
 FIELDS = {
+    "AGENT_MODE": ("Agent Autonomy (suggest = Agent Proposes, You OK Each Trade; auto = Agent Trades On Its Own)", False, "suggest", "choice"),
     "PRIVATE_KEY": ("Wallet Private Key (Base58, Burner Wallet)", True, "", "key"),
     "RPC_URL": ("Solana RPC URL", True, "", "url"),
     "HELIUS_DAILY_CREDIT_CAP": ("Helius Plan (Sets The Daily Credit Cap)", False, "30000", "plan"),
@@ -327,7 +328,8 @@ def brain_label(p: str, env: dict) -> str:
 def rows(env: dict) -> list:
     """[(area, key or None, label, required)] in display order; key None = info row."""
     m, f = brain_pair(env)
-    out = [("Wallet", "PRIVATE_KEY", FIELDS["PRIVATE_KEY"][0], True),
+    out = [("Autonomy", "AGENT_MODE", FIELDS["AGENT_MODE"][0], False),
+           ("Wallet", "PRIVATE_KEY", FIELDS["PRIVATE_KEY"][0], True),
            ("RPC", "RPC_URL", FIELDS["RPC_URL"][0], True),
            ("RPC", CAP_KEY, FIELDS[CAP_KEY][0], False),
            ("Brain", "LLM_MAIN", FIELDS["LLM_MAIN"][0], False),
@@ -504,6 +506,18 @@ def ask_field(io: IO, key: str, cur: dict):
         opts = list(LLM_CHOICES) if key == "LLM_MAIN" else [p for p in LLM_CHOICES if p != m or p == "off"]
         v = io.choose(f"{label} [dim](The Other Provider Is Off Even If Its Key Is Set)[/]", opts, now)
         return None if (v == now and str(cur.get(key) or "").strip()) else v
+    if key == "AGENT_MODE":
+        io.con.print("[bold red]First: how much can the agent do on its own?[/]\n"
+                     "  suggest (default): the agent proposes each open, add and close and waits for your OK.\n"
+                     "  auto: WARNING - the agent opens and closes leveraged positions on its own inside your caps, "
+                     "with no per-trade sign-off.")
+        now = str(cur.get(key) or "suggest").strip().lower()
+        now = now if now in ("suggest", "auto") else "suggest"
+        v = io.choose(label, ["suggest", "auto"], now)
+        if v == "auto" and now != "auto" and io.ask("Type AUTO To Confirm").strip() != "AUTO":
+            io.con.print("[yellow]Not Confirmed; Staying In suggest.[/]")
+            v = "suggest"
+        return None if (v == now and str(cur.get(key) or "").strip()) else v
     if key == CAP_KEY:
         return ask_helius_plan(io, cur)
     if key == "OWNER_COMMANDS":
@@ -598,9 +612,13 @@ def wizard(out_path: Path = ENV_FILE, io: IO | None = None, answers: dict | None
         io.con.print("[1] Fill Only What Is Missing   [2] Edit Items   [3] Go Through Everything   [Q] Back")
         mode = io.choose("Choose", ["1", "2", "3"], "1")
         keys = editable_keys(cur)
+        first = {}
+        if mode != "2" and (mode == "3" or not str(cur.get("AGENT_MODE") or "").strip()):
+            fv = ask_field(io, "AGENT_MODE", cur)   # autonomy is always the first question
+            first["AGENT_MODE"] = fv if fv is not None else str(cur.get("AGENT_MODE") or "suggest")
         if mode == "1":
             todo = missing_keys(cur) + (list(SWITCHES) if not MARKER.exists() else [])
-            if not todo:
+            if not todo and not first:
                 io.con.print(f"[{GREEN}]Nothing Missing.[/]")
                 write_marker("wizard", [])
                 print_agent_setup_reminder(io)
@@ -611,8 +629,8 @@ def wizard(out_path: Path = ENV_FILE, io: IO | None = None, answers: dict | None
             todo = [keys[i - 1] for i in idx if 1 <= i <= len(keys)]
         else:
             todo = list(keys)
-        vals: dict = {}
-        done: set = set()
+        vals: dict = dict(first)
+        done: set = set(first)
         while todo:
             k = todo.pop(0)
             if k in done:

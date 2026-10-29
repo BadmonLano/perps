@@ -138,9 +138,11 @@ Every bot resolves paths from this one root and creates any missing folders on f
 
 ## 4. Wallet, sizes and going live
 
+**First question: agent autonomy (`AGENT_MODE`).** The wizard asks it before anything else. `suggest` (default, preselected): the agent proposes each open, add and close and waits for the owner's OK before sending it. `auto`: **warning** - the agent opens and closes leveraged positions on its own inside the caps; the wizard makes the owner type `AUTO`. Never pick auto for the owner. `NEW_POSITIONS_ENABLED=false` stays the hard switch in both modes.
+
 Start in paper mode: `PERPS_DRY_RUN=true` (the template default) simulates fills at the oracle price, keeps a separate paper book, runs all protection, and never signs or sends anything; no wallet key needed. Go live with `PERPS_DRY_RUN=false` plus the wallet key, then restart Perps. See README, Paper mode.
 
-This is configuration, not approval. Walk the owner through `bots/.env.example`: wallet, RPC, brain, Telegram, owner commands. Live knobs (the new-positions and entry-alerts switches, trail, leverage defaults and the rest) live in `bots/tuner/perps_params.json` and are changed by directive (`json_relay/perp_meeting.json`, see perps-boss "Directives") or the console's Settings screen.
+After the autonomy question, walk the owner through `bots/.env.example`: wallet, RPC, brain, Telegram, owner commands. Live knobs (the new-positions and entry-alerts switches, trail, leverage defaults and the rest) live in `bots/tuner/perps_params.json` and are changed by directive (`json_relay/perp_meeting.json`, see perps-boss "Directives") or the console's Settings screen.
 
 - `NEW_POSITIONS_ENABLED` (tuner, default true): false = every long, short and add the agent sends is declined (reason `new_positions_off`); closes, adjust, `update_params`, `close_pct` and `pull_initial` still work, and packets keep coming. The bot never opens a trade on its own either way.
 - `ENTRY_ALERTS_ENABLED` (tuner, default true): false = the intel scanner sends no entry alerts. Nothing else changes.

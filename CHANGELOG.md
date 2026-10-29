@@ -2,6 +2,9 @@
 
 Full history: [TIMELINE.md](TIMELINE.md).
 
+## v1.0.5 (2026-10-29): autonomy is the first setup question
+- `AGENT_MODE` (`suggest` default / `auto` with a warning and typed `AUTO` confirm) is the first wizard question and the first row of the setup table; `bots/.env.example` ships `AGENT_MODE=suggest`. The perps-boss skill tells the agent to propose and wait for the owner's OK in `suggest`. Paper stays the default (`PERPS_DRY_RUN=true`). No trading code or other defaults changed. Test: `bots/tests/test_setup_wizard.py`.
+
 ## v1.0.4 (2026-10-28): cursor.directory safety rule
 - `rules/perps-safety.mdc: cursor.directory Rule component (paper default, no secrets, respect caps, confirm live orders). Docs/packaging only; no trading code or defaults changed.`
 
