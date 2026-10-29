@@ -1,5 +1,5 @@
 # Misc inbox lane
-- Trigger: set by the owner or agent (pick your own cadence)
+- Trigger: set by the owner or agent (pick your own cadence); recurring and always on, see `bots/.env` LANE_CADENCE_* and ACTIVE_HOURS (automations/README.md "Always on")
 - Lane source: every `inbox/` file NOT claimed by another lane (i.e. not `perps_bot - *`, not `perp - *`, not `security_warden - *`), except `.gitkeep` and `perp_exit_suggestion.json`
 - Reads: those packets, the ecosystem skills they route to
 - Writes: `inbox_results/done|failed` (+ `.failure.md`), `owner_inbox/` patch notes, `bot_logs/inbox_cron_audit.log`, owner-ping when it matters

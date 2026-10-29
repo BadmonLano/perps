@@ -1,6 +1,6 @@
 {
   "name": "perps",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Open-source Jupiter Perps (SOL/BTC/ETH) bot run by your SI agent. Paper mode by default, leverage cap, stop and take-profit protection, oracle halt and open/add guards, with inbox packets so Grok Bot, Muse or any SI agent can read and act within your rules.",
   "author": {
     "name": "Bentayga Empire LLC",

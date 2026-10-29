@@ -8660,6 +8660,23 @@ async def process_signal(data: dict):
         await notify(f"⏸️ <b>Perps {action} declined — {_mk}</b>\n{_why}")
         return
 
+    # v1.0.6 ACTIVE_HOURS (bots/active_hours.py): the loop runs 24/7; outside the owner's window it
+    # idles on new exposure only. Checked before any order is built, so nothing is cut off mid-order;
+    # closes, adjust, update_params, close_pct, TP/SL/trail and monitoring keep running. Resumes on its own.
+    if action in ("long", "short", "add", "limit_long", "limit_short"):
+        try:
+            import active_hours as _ah
+            _aok, _awhy = _ah.in_active_window()
+        except Exception:
+            _aok, _awhy = True, ""
+        if not _aok:
+            _mk = (data.get("market") or "SOL-PERP").upper()
+            _why = f"outside_active_hours: {_awhy}; new opens/adds resume when the window opens (exits still run)"
+            print(f"[perp] {action} {_mk} declined: {_why}")
+            _perp_decline_log_bot(_mk, action, _why, "outside_active_hours")
+            await notify(f"⏸️ <b>Perps {action} declined — {_mk}</b>\n{_why}")
+            return
+
     if action == "add":
         await execute_position_add(data)
         return

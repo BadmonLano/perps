@@ -13,6 +13,10 @@ allowed-tools: [Read, Write, Edit, Bash]
 
 Read `AGENT_MODE` in `bots/.env` (asked first in setup). `suggest` (default): before you write any open, add or close signal, show the owner the trade (market, side, collateral, leverage, SL/TP, why) and wait for their OK; then send it. `auto` (owner opt-in): send signals inside the caps and notify. Protection changes on an open position (SL/TP, trail) follow your normal rules in both modes. Never change `AGENT_MODE` yourself.
 
+## Always on: cadence and active hours
+
+Perps is a loop meant to run continuously: keep your lane automations saved and recurring (always-on hosted agent, or auto-start on boot), at the cadences in `bots/.env` (`LANE_CADENCE_*`; `python bots/active_hours.py` prints them). At first run, ask the owner `ACTIVE_HOURS` (default `00:00-23:59` = always) and `ACTIVE_TZ` right after `AGENT_MODE`. Outside the window keep running every lane and keep managing and protecting open positions (closes, update_params, TP/SL, trail), but send no new long, short, add or limit entry; the bot declines them with `outside_active_hours` and resumes on its own. Never change `ACTIVE_HOURS` yourself.
+
 ## Owner rules come first
 
 Before every trade decision (open, size, add, adjust, close, param change), read the owner's rules: `rules/rules.md`. Owner rules override every default in this skill (max size, max leverage, no-trade hours, loss limits). The bot's hard gates still apply on top. If a rule and a packet conflict, follow the rule and say so in your `reason`.

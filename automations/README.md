@@ -4,6 +4,10 @@ Five recurring jobs for your agent: four paste-ready lane prompts here, one per 
 
 Owner commands (`/roast`, `/recap`, `/autopsy [market|last]`, `/manage`, `/leave`) are not a lane: `bots/sub-bots/owner_commands.py` answers them itself (modes `off`, `file`, `telegram`; replies in `inbox_results/owner_replies/`). A lane may serve a file-mode request but never drains `owner_commands/`. See SETUP.md section 6.5.
 
+## Always on (cadence + active hours)
+
+These lanes are meant to run **continuously**, as saved recurring automations on an always-on agent (or one that auto-starts on boot), not once. Use the cadences in `bots/.env` (`LANE_CADENCE_PERPS_LANE_MIN` (blank = the wizard's suggestion, 5-30), `LANE_CADENCE_MISC_LANE_MIN` (15), `LANE_CADENCE_WARDEN_LANE_MIN` (20), `LANE_MORNING_BRIEF_AT` (08:00), `LANE_NIGHTLY_EVAL_AT` (23:30)); `python bots/active_hours.py` prints them. Outside `ACTIVE_HOURS` / `ACTIVE_DAYS` (`ACTIVE_TZ`) keep running every lane: drain packets, manage and protect open positions, warden checks. Just do not send new opens, adds and limit entries; the bot declines them anyway (`outside_active_hours`) and they resume on their own when the window opens. Never ask the owner to restart the lanes because of the window.
+
 ## Placeholders
 
 Before pasting a prompt, replace `{AGENT_NAME}` with your agent's name and `{USER}` with the owner's name (how you address them). Set the same names as `AGENT_NAME` and `OWNER_NAME` in `bots/.env`: `learnings_writer` fills both into `learnings/LEARNINGS.md` when it creates it from the template.

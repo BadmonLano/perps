@@ -18,12 +18,23 @@ Perps is a Solana perpetuals trading system for Jupiter Perps (SOL, BTC, ETH) th
 > - **The gates reduce risk; they do not remove it.** Bugs, RPC failures, stale feeds and bad model output can lose money.
 > - **Not financial advice.** This is experimental software provided as-is under the MIT license, with no warranty. You are responsible for every transaction it sends.
 
+## Always on: loop, cadence and active hours
+
+Perps is a **loop meant to run continuously**: the bot runs 24/7 on its cadence and your agent runs the lanes in `automations/` on theirs. It is not a one-shot script.
+
+- **Keep it running:** use an always-on hosted agent (best), or auto-start on boot on your own PC: Windows Task Scheduler "At log on" running `python bots/perps.py`, macOS a `launchd` agent, Linux a `systemd --user` service or `@reboot` cron. Have the agent's lane jobs saved as recurring automations so they survive restarts.
+- **Active hours (tunable, `bots/.env`):** `ACTIVE_HOURS` (default `00:00-23:59` = always on; e.g. `09:00-23:00`, overnight `22:00-02:00`, several windows `09:00-12:00,18:00-23:00`), `ACTIVE_TZ` (default `America/New_York`), `ACTIVE_DAYS` (blank = every day; e.g. `mon-fri`). Outside the window the loop idles on new opens, adds and limit entries (declined with reason `outside_active_hours`), never cuts off an order mid-send, keeps closes, adjust, update_params, close_pct, TP/SL, trail, exit floor and monitoring running, and resumes on its own when the window opens.
+- **Cadence (tunable):** lane cadences `LANE_CADENCE_PERPS_LANE_MIN` (blank = the wizard's suggestion, 5-30), `LANE_CADENCE_MISC_LANE_MIN` (15), `LANE_CADENCE_WARDEN_LANE_MIN` (20), `LANE_MORNING_BRIEF_AT` (08:00), `LANE_NIGHTLY_EVAL_AT` (23:30). Bot-side cadences keep their existing settings (`PERP_POLL_SECONDS`, `FEED_CADENCE`, `PACKET_INTERVAL_SECONDS`).
+- **Check it:** `python bots/active_hours.py` prints whether new entries are allowed right now and each lane's cadence (no secrets).
+- The setup wizard asks active hours right after the agent-autonomy question (`AGENT_MODE`).
+
 ## Works with
 
 Perps can be run by Grok Bot, Muse, or an agent from any of the larger SI companies: any SI agent that can read and write files and run Python works. No official partnership or endorsement is implied.
 
 ## Contents
 
+- [Always on: loop, cadence and active hours](#always-on-loop-cadence-and-active-hours)
 - [Works with](#works-with)
 - [Glossary](#glossary)
 - [Features](#features)

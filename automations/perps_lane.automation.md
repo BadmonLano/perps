@@ -1,5 +1,5 @@
 # Perps inbox lane (main)
-- Trigger: set by the owner or agent (pick your own cadence, e.g. every 10-15 min; see SETUP "Build your automations")
+- Trigger: set by the owner or agent (pick your own cadence, e.g. every 10-15 min; see SETUP "Build your automations"); recurring and always on, see `bots/.env` LANE_CADENCE_* and ACTIVE_HOURS (automations/README.md "Always on")
 - Lane source: perps_bot -> `inbox/perps_bot - *` and `inbox/perp - *`
 - Reads: those packets, `skills/perps-boss/SKILL.md`, `bot_logs/perp_positions.json`, `bot_logs/perp_signal_acks/acks.jsonl`, live odds and feeds through the packet or `json_relay/feed_request.json`
 - Writes: `json_relay/perp_<chain>_signal.json` (via `bots/tools/send_signal.py`), `json_relay/feed_request.json` (on demand), `inbox_results/done|failed` (+ `.failure.md`), `bot_logs/inbox_cron_audit.log` (via `bots/tools/lane_run.py`), owner-ping when it matters

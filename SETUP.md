@@ -6,6 +6,16 @@
 
 > **The owner runs setup once by hand.** The first `python bots/perps.py` opens the setup wizard when `bots/.env` is missing or incomplete (section 1.1). Or copy `bots/.env.example` to `bots/.env` and fill the must-haves (section 0), or use the console's Settings and Brain Setup screens (`python bots/perps_ui.py`). After that, you (the agent) can change the rest through Settings or directives.
 
+## Always on: loop, cadence and active hours
+
+Perps is a **loop meant to run continuously**: the bot runs 24/7 on its cadence and your agent runs the lanes in `automations/` on theirs. It is not a one-shot script.
+
+- **Keep it running:** use an always-on hosted agent (best), or auto-start on boot on your own PC: Windows Task Scheduler "At log on" running `python bots/perps.py`, macOS a `launchd` agent, Linux a `systemd --user` service or `@reboot` cron. Have the agent's lane jobs saved as recurring automations so they survive restarts.
+- **Active hours (tunable, `bots/.env`):** `ACTIVE_HOURS` (default `00:00-23:59` = always on; e.g. `09:00-23:00`, overnight `22:00-02:00`, several windows `09:00-12:00,18:00-23:00`), `ACTIVE_TZ` (default `America/New_York`), `ACTIVE_DAYS` (blank = every day; e.g. `mon-fri`). Outside the window the loop idles on new opens, adds and limit entries (declined with reason `outside_active_hours`), never cuts off an order mid-send, keeps closes, adjust, update_params, close_pct, TP/SL, trail, exit floor and monitoring running, and resumes on its own when the window opens.
+- **Cadence (tunable):** lane cadences `LANE_CADENCE_PERPS_LANE_MIN` (blank = the wizard's suggestion, 5-30), `LANE_CADENCE_MISC_LANE_MIN` (15), `LANE_CADENCE_WARDEN_LANE_MIN` (20), `LANE_MORNING_BRIEF_AT` (08:00), `LANE_NIGHTLY_EVAL_AT` (23:30). Bot-side cadences keep their existing settings (`PERP_POLL_SECONDS`, `FEED_CADENCE`, `PACKET_INTERVAL_SECONDS`).
+- **Check it:** `python bots/active_hours.py` prints whether new entries are allowed right now and each lane's cadence (no secrets).
+- The setup wizard asks active hours right after the agent-autonomy question (`AGENT_MODE`).
+
 ## How Perps works, in short
 
 The key ideas before you start:
@@ -139,6 +149,8 @@ Every bot resolves paths from this one root and creates any missing folders on f
 ## 4. Wallet, sizes and going live
 
 **First question: agent autonomy (`AGENT_MODE`).** The wizard asks it before anything else. `suggest` (default, preselected): the agent proposes each open, add and close and waits for the owner's OK before sending it. `auto`: **warning** - the agent opens and closes leveraged positions on its own inside the caps; the wizard makes the owner type `AUTO`. Never pick auto for the owner. `NEW_POSITIONS_ENABLED=false` stays the hard switch in both modes.
+
+**Second question: active hours (`ACTIVE_HOURS` + `ACTIVE_TZ`).** Asked right after autonomy. Default `00:00-23:59` (always on), `America/New_York`. The loop runs 24/7 either way; outside the window new opens/adds are declined (`outside_active_hours`) and everything else keeps running. See "Always on" at the top.
 
 Start in paper mode: `PERPS_DRY_RUN=true` (the template default) simulates fills at the oracle price, keeps a separate paper book, runs all protection, and never signs or sends anything; no wallet key needed. Go live with `PERPS_DRY_RUN=false` plus the wallet key, then restart Perps. See README, Paper mode.
 

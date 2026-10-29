@@ -2,6 +2,13 @@
 
 Full history: [TIMELINE.md](TIMELINE.md).
 
+## v1.0.6 (2026-10-29): always-on loop, active hours, tunable lane cadences
+- **The bot is a loop meant to run continuously.** New "Always on: loop, cadence and active hours" section at the top of README.md and SETUP.md, plus notes in `skills/perps-boss/SKILL.md`, `automations/README.md` and each lane file: keep it on an always-on hosted agent or auto-start on boot, and keep the lanes as saved recurring automations.
+- **`ACTIVE_HOURS` (default `00:00-23:59` = always on), `ACTIVE_TZ` (`America/New_York`), `ACTIVE_DAYS` (blank = every day).** Outside the window long/short/add/limit entries are declined (`outside_active_hours`) before any order is built, so nothing is cut off mid-order; closes, adjust, update_params, close_pct, TP/SL/trail and monitoring keep running, and it resumes on its own. `bots/active_hours.py` (+ `python bots/active_hours.py` status, no secrets).
+- **Lane cadences (tunable):** `LANE_CADENCE_PERPS_LANE_MIN` (blank = wizard suggestion, 5-30), `LANE_CADENCE_MISC_LANE_MIN` (15), `LANE_CADENCE_WARDEN_LANE_MIN` (20), `LANE_MORNING_BRIEF_AT` (08:00), `LANE_NIGHTLY_EVAL_AT` (23:30). `PERP_POLL_SECONDS`, `FEED_CADENCE` unchanged, not duplicated.
+- **Setup wizard:** active hours + timezone asked right after `AGENT_MODE` (setup table rows 2-3); end-of-wizard reminder says it is an always-on loop and honours `LANE_CADENCE_PERPS_LANE_MIN`.
+- Defaults keep the old always-on behaviour. Tests: `bots/tests/test_active_hours.py`, `bots/tests/test_setup_wizard.py` updated.
+
 ## v1.0.5 (2026-10-29): autonomy is the first setup question
 - `AGENT_MODE` (`suggest` default / `auto` with a warning and typed `AUTO` confirm) is the first wizard question and the first row of the setup table; `bots/.env.example` ships `AGENT_MODE=suggest`. The perps-boss skill tells the agent to propose and wait for the owner's OK in `suggest`. Paper stays the default (`PERPS_DRY_RUN=true`). No trading code or other defaults changed. Test: `bots/tests/test_setup_wizard.py`.
 

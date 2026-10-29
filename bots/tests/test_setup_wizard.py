@@ -48,7 +48,7 @@ if __name__ == "__main__":  # script mode (also what the test above runs)
     
     try:
         # 1. Fresh: Fill Missing
-        r, out = run(["1", "", "notakey", KEY, "https://rpc.example/x", "", "GROK", "ollama", "", "", "", "",
+        r, out = run(["1", "", "", "Europe/London", "notakey", KEY, "https://rpc.example/x", "", "GROK", "ollama", "", "", "", "",
                       "", "", "FILE", "", "", "", "", "", "n", "y", "y"])   # blanks: cadence, flow URL, lev cap, ladder, one-per-market; then new positions n, entry alerts y, save y
         env = ps.read_env()
         check("fresh save", r is not None and ps.env_complete(env))
@@ -56,6 +56,9 @@ if __name__ == "__main__":  # script mode (also what the test above runs)
         check("autonomy asked first, suggest default", env.get("AGENT_MODE") == "suggest"
               and "how much can the agent do" in out
               and out.find("how much can the agent do") < out.find("Not A Base58 Private Key"))
+        check("active hours asked right after autonomy, always-on default",
+              env.get("ACTIVE_HOURS") == "00:00-23:59" and env.get("ACTIVE_TZ") == "Europe/London"
+              and out.find("how much can the agent do") < out.find("Active hours.") < out.find("Not A Base58 Private Key"))
         check("brain main/fallback case-insensitive", (env.get("LLM_MAIN"), env.get("LLM_FALLBACK")) == ("grok", "ollama"))
         check("owner commands file", env.get("OWNER_COMMANDS") == "file")
         check("feed cadence 5 min default", env.get("FEED_CADENCE") == "5")
@@ -70,7 +73,7 @@ if __name__ == "__main__":  # script mode (also what the test above runs)
         # 2. Edit one item; unknown key kept; backup made
         with open(ps.ENV_FILE, "a") as f:
             f.write("MY_CUSTOM_KEY=keepme\n")
-        r, out = run(["2", "11", "123:abc", "y"])   # item numbers +2: Autonomy row is #1, Helius plan row is #4
+        r, out = run(["2", "13", "123:abc", "y"])   # item numbers +4: Autonomy rows #1-3 (mode, active hours, tz), Helius plan row is #6
         env = ps.read_env()
         check("unknown key kept", env.get("MY_CUSTOM_KEY") == "keepme")
         check("item edited", env.get("TELEGRAM_TOKEN") == "123:abc")
@@ -114,7 +117,7 @@ if __name__ == "__main__":  # script mode (also what the test above runs)
         check("legacy key migrated on save", d == {"NEW_POSITIONS_ENABLED": False, "ENTRY_ALERTS_ENABLED": True})
 
         # 6. perps.py --setup with piped input exits without starting the bot
-        p = subprocess.run([sys.executable, os.path.join(BOTS, "perps.py"), "--setup"], input="2\n12\n555\ny\n",
+        p = subprocess.run([sys.executable, os.path.join(BOTS, "perps.py"), "--setup"], input="2\n14\n555\ny\n",
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
                            env={**os.environ, "WORKSPACE_DIR": TMP, "PYTHONIOENCODING": "utf-8"})
         check("--setup exits 0", p.returncode == 0)

@@ -60,6 +60,8 @@ BACK_WORDS = ("q", "back", "esc", "b", "\x1b")
 # (key, label, secret, default, kind)  kind: text | url | choice | bool | tuner
 FIELDS = {
     "AGENT_MODE": ("Agent Autonomy (suggest = Agent Proposes, You OK Each Trade; auto = Agent Trades On Its Own)", False, "suggest", "choice"),
+    "ACTIVE_HOURS": ("Active Hours For New Opens (Loop Runs 24/7; 00:00-23:59 = Always)", False, "00:00-23:59", "active"),
+    "ACTIVE_TZ": ("Timezone For Active Hours", False, "America/New_York", "active"),
     "PRIVATE_KEY": ("Wallet Private Key (Base58, Burner Wallet)", True, "", "key"),
     "RPC_URL": ("Solana RPC URL", True, "", "url"),
     "HELIUS_DAILY_CREDIT_CAP": ("Helius Plan (Sets The Daily Credit Cap)", False, "30000", "plan"),
@@ -329,6 +331,8 @@ def rows(env: dict) -> list:
     """[(area, key or None, label, required)] in display order; key None = info row."""
     m, f = brain_pair(env)
     out = [("Autonomy", "AGENT_MODE", FIELDS["AGENT_MODE"][0], False),
+           ("Autonomy", "ACTIVE_HOURS", FIELDS["ACTIVE_HOURS"][0], False),
+           ("Autonomy", "ACTIVE_TZ", FIELDS["ACTIVE_TZ"][0], False),
            ("Wallet", "PRIVATE_KEY", FIELDS["PRIVATE_KEY"][0], True),
            ("RPC", "RPC_URL", FIELDS["RPC_URL"][0], True),
            ("RPC", CAP_KEY, FIELDS[CAP_KEY][0], False),
@@ -518,6 +522,20 @@ def ask_field(io: IO, key: str, cur: dict):
             io.con.print("[yellow]Not Confirmed; Staying In suggest.[/]")
             v = "suggest"
         return None if (v == now and str(cur.get(key) or "").strip()) else v
+    if key in ("ACTIVE_HOURS", "ACTIVE_TZ"):
+        import active_hours as _ah
+        if key == "ACTIVE_HOURS":
+            io.con.print("[bold]Active hours.[/] The bot is a loop that runs continuously on its cadence. This window only "
+                         "decides when it may OPEN or ADD; closes, TP/SL, trail and monitoring always run, nothing is cut "
+                         "off mid-order, and it resumes on its own.\n"
+                         "  00:00-23:59 (default) = always on. Examples: 09:00-23:00, 22:00-02:00, 09:00-12:00,18:00-23:00.")
+        now = str(cur.get(key) or default).strip()
+        v = (io.ask(f"{label} [dim](Enter = {now})[/]") or "").strip() or now
+        test = {"ACTIVE_HOURS": cur.get("ACTIVE_HOURS") or default, "ACTIVE_TZ": cur.get("ACTIVE_TZ") or "America/New_York", key: v}
+        if "unreadable" in _ah.in_active_window(env=test)[1]:
+            io.con.print(f"[yellow]Could Not Read {v!r}; Keeping {now}.[/]")
+            v = now
+        return None if (v == now and str(cur.get(key) or "").strip()) else v
     if key == CAP_KEY:
         return ask_helius_plan(io, cur)
     if key == "OWNER_COMMANDS":
@@ -571,6 +589,11 @@ def print_agent_setup_reminder(io, env: dict | None = None):
     try:
         env = env if env is not None else read_env()
         m, who = suggest_drain_minutes(env)
+        try:   # LANE_CADENCE_PERPS_LANE_MIN (bots/.env) overrides the suggestion
+            if str(env.get("LANE_CADENCE_PERPS_LANE_MIN") or "").strip():
+                m, who = int(float(env["LANE_CADENCE_PERPS_LANE_MIN"])), "LANE_CADENCE_PERPS_LANE_MIN"
+        except ValueError:
+            pass
         io.con.print("")
         io.con.print("[bold yellow]Agent Setup (Required)[/]")
         io.con.print("The bot only writes packets. The agent MUST create recurring jobs from automations/:")
@@ -578,6 +601,9 @@ def print_agent_setup_reminder(io, env: dict | None = None):
         io.con.print("  warden_lane    every 15-20 min   misc_lane every 15-30 min   morning_brief once a day")
         io.con.print("  Stagger start minutes, e.g. perps 3-53/10, warden 7,27,47, misc 9,24,39,54.")
         io.con.print("  Re-gauge when a cadence changes. Details: SETUP.md section 11.")
+        io.con.print("  This is a loop meant to run continuously: keep the agent always-on (hosted) or auto-start on boot.")
+        io.con.print(f"  Active hours: {env.get('ACTIVE_HOURS') or '00:00-23:59'} {env.get('ACTIVE_TZ') or 'America/New_York'} "
+                     "(new opens only; exits always run). Tune in bots/.env.")
     except Exception:
         pass
 
@@ -616,6 +642,9 @@ def wizard(out_path: Path = ENV_FILE, io: IO | None = None, answers: dict | None
         if mode != "2" and (mode == "3" or not str(cur.get("AGENT_MODE") or "").strip()):
             fv = ask_field(io, "AGENT_MODE", cur)   # autonomy is always the first question
             first["AGENT_MODE"] = fv if fv is not None else str(cur.get("AGENT_MODE") or "suggest")
+            for ak in ("ACTIVE_HOURS", "ACTIVE_TZ"):   # v1.0.6: active hours right after autonomy
+                av = ask_field(io, ak, {**cur, **first})
+                first[ak] = av if av is not None else str(cur.get(ak) or FIELDS[ak][2])
         if mode == "1":
             todo = missing_keys(cur) + (list(SWITCHES) if not MARKER.exists() else [])
             if not todo and not first:

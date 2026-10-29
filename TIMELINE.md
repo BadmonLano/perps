@@ -2,6 +2,9 @@
 
 Version history, newest first.
 
+## v1.0.6 (2026-10-29): always-on loop, active hours, tunable lane cadences
+- Always-on loop docs, `ACTIVE_HOURS`/`ACTIVE_TZ`/`ACTIVE_DAYS` (default always on), tunable `LANE_CADENCE_*`, asked right after `AGENT_MODE`. Details: CHANGELOG.md.
+
 ## v1.0.5 (2026-10-29): autonomy is the first setup question
 - `AGENT_MODE` (suggest default, auto with warning) asked first in the wizard; perps-boss skill honours it. No trading code changed.
 
